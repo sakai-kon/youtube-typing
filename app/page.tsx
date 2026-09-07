@@ -28,11 +28,11 @@ export default function Home() {
 
   return <>
     <header className="site-header">
-      <div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span><span>YouTube <b>Typing</b></span></Link><nav className="nav"><Link href="/search">探す</Link><Link href="/create">譜面を作る</Link>{loggedIn ? <Link href="/profile?id=me">プロフィール</Link> : <Link className="nav-accent" href="/login">ログイン</Link>}</nav></div>
+      <div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span><span>YouTube <b>Typing</b></span></Link><nav className="nav"><Link href="/search">探す</Link><Link href="/play">プレイ画面</Link><Link href="/create">譜面を作る</Link>{loggedIn ? <Link href="/profile?id=me">プロフィール</Link> : <Link className="nav-accent" href="/login">ログイン</Link>}</nav></div>
     </header>
     <main>
       <section className="hero container">
-        <div className="hero-copy"><div className="eyebrow">YOUTUBE × TYPING</div><h1>動画の「今」を、<br/><span>打ち込むゲーム。</span></h1><p>YouTubeを再生しながら、自分で譜面を作る。あとはタイミングに合わせてローマ字で打つだけ。練習にも、遊びにも。</p><div className="cta-row hero-actions"><Link className="btn primary btn-large" href="/search">すぐ遊ぶ <span>→</span></Link><Link className="btn btn-large" href="/create">譜面を作る</Link></div><div className="hero-note"><span className="status-dot"/>ブラウザだけで動作　・　AI判定なし　・　入力コスト0</div></div>
+        <div className="hero-copy"><div className="eyebrow">YOUTUBE × TYPING</div><h1>動画の「今」を、<br/><span>打ち込むゲーム。</span></h1><p>YouTubeを再生しながら、自分で譜面を作る。あとはタイミングに合わせてローマ字で打つだけ。練習にも、遊びにも。</p><div className="cta-row hero-actions"><Link className="btn primary btn-large" href="/search">すぐ遊ぶ <span>→</span></Link><Link className="btn btn-large" href="/play">プレイ画面を見る</Link><Link className="btn btn-large" href="/create">譜面を作る</Link></div><div className="hero-note"><span className="status-dot"/>ブラウザだけで動作　・　AI判定なし　・　入力コスト0</div></div>
         <div className="hero-visual"><div className="mock-window"><div className="mock-top"><span/><span/><span/><em>typing stage</em></div><div className="mock-video"><div className="mock-play">▶</div></div><div className="mock-stage"><small>NOW PLAYING</small><strong>今日も一日頑張ろう</strong><span>kyoumoichinichiganbarou</span><div className="mock-input">kyoumoichi<span>▍</span></div></div></div></div>
       </section>
       <section className="stats-bar container"><div><b>{maps.length}</b><span>公開・ローカル譜面</span></div><div><b>{totalLines}</b><span>登録済みの行</span></div><div><b>0</b><span>プレイ中のAIコスト</span></div></section>
