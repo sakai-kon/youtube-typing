@@ -41,9 +41,9 @@ export default function ProfilePage() {
         if (alive) setMaps(ownMaps);
       } else {
         const { data: publicMaps } = await supabase.from('maps').select('*').eq('author_id', targetId).in('visibility', ['public', 'unlisted']).order('updated_at', { ascending: false });
-        if (publicMaps && alive) setMaps(publicMaps.map((row) => ({ id: row.id, authorId: row.author_id, title: row.title, description: row.description, youtubeVideoId: row.youtube_video_id, tags: row.tags, visibility: row.visibility as TypingMap['visibility'], createdAt: row.created_at, updatedAt: row.updated_at, lines: Array.isArray(row.lines) ? row.lines as TypingMap['lines'] : [] })));
+        if (publicMaps && alive) setMaps(publicMaps.map((row) => ({ id: row.id, authorId: row.author_id, title: row.title, description: row.description, youtubeVideoId: row.youtube_video_id, tags: row.tags, visibility: row.visibility as TypingMap['visibility'], createdAt: row.created_at, updatedAt: row.updated_at, playCount: Number(row.play_count ?? 0), lines: Array.isArray(row.lines) ? row.lines as TypingMap['lines'] : [] })));
       }
-      setLoading(false);
+      if (alive) setLoading(false);
     };
     load().catch((error) => { if (alive) { setMessage(error instanceof Error ? error.message : '読み込みに失敗しました。'); setLoading(false); } });
     return () => { alive = false; };
@@ -62,7 +62,7 @@ export default function ProfilePage() {
   const signOut = async () => { if (supabase) { await supabase.auth.signOut(); window.location.assign(sitePath('/')); } };
 
   return <>
-    <header className="site-header"><Link className="brand" href="/"><span className="brand-mark">YT</span> YouTube <span>Typing</span></Link><nav className="nav"><Link href="/create">譜面を作る</Link>{mine && <button className="btn" onClick={signOut}>ログアウト</button>}</nav></header>
+    <header className="site-header"><Link className="brand" href="/"><span className="brand-mark">YT</span> YouTube <span>Typing</span></Link><nav className="nav"><Link href="/create">譜面を作る</Link>{mine && <button className="btn" onClick={signOut}>ログアウト</button>}</nav></div>
     <main className="container section profile-page">
       <div className="profile-hero">
         <div className="profile-avatar">{(profile.display_name || profile.username || 'Y').slice(0,1).toUpperCase()}</div>
