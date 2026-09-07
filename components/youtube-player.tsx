@@ -1,10 +1,26 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 type PlayerState = 'unstarted' | 'playing' | 'paused' | 'ended' | 'buffering' | 'cued';
-type Props = { videoId: string; onTime?: (time: number) => void; onState?: (state: PlayerState) => void; compact?: boolean };
-type YTPlayer = { getCurrentTime: () => number; playVideo: () => void; pauseVideo: () => void; seekTo: (seconds: number, allowSeekAhead: boolean) => void; destroy: () => void };
+type PlayerControl = {
+  play: () => void;
+  pause: () => void;
+  togglePause: () => boolean;
+  seek: (seconds: number) => void;
+  setPlaybackRate: (rate: number) => void;
+  setVolume: (volume: number) => void;
+};
+type Props = { videoId: string; onTime?: (time: number) => void; onState?: (state: PlayerState) => void; compact?: boolean; controllerRef?: MutableRefObject<PlayerControl | null> };
+type YTPlayer = {
+  getCurrentTime: () => number;
+  playVideo: () => void;
+  pauseVideo: () => void;
+  seekTo: (seconds: number, allowSeekAhead: boolean) => void;
+  setPlaybackRate?: (suggestedRate: number) => void;
+  setVolume?: (volume: number) => void;
+  destroy: () => void;
+};
 type YTGlobal = { Player: new (element: HTMLElement, options: { videoId: string; playerVars?: Record<string, number | string>; events?: { onStateChange?: (event: { data: number }) => void } }) => YTPlayer };
 
 declare global { interface Window { YT?: YTGlobal } }
@@ -27,7 +43,7 @@ function loadYouTubeApi(): Promise<YTGlobal> {
   return apiPromise;
 }
 
-export function YouTubePlayer({ videoId, onTime, onState }: Props) {
+export function YouTubePlayer({ videoId, onTime, onState, controllerRef }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
@@ -51,6 +67,23 @@ export function YouTubePlayer({ videoId, onTime, onState }: Props) {
           },
         },
       });
+      if (controllerRef) {
+        controllerRef.current = {
+          play: () => playerRef.current?.playVideo(),
+          pause: () => playerRef.current?.pauseVideo(),
+          togglePause: () => {
+            if (state === 'playing') {
+              playerRef.current?.pauseVideo();
+              return true;
+            }
+            playerRef.current?.playVideo();
+            return false;
+          },
+          seek: (seconds) => playerRef.current?.seekTo(Math.max(0, seconds), true),
+          setPlaybackRate: (rate) => playerRef.current?.setPlaybackRate?.(rate),
+          setVolume: (volume) => playerRef.current?.setVolume?.(Math.max(0, Math.min(100, volume))),
+        };
+      }
     }).catch(() => {
       if (alive) setState('unstarted');
     });
@@ -60,10 +93,11 @@ export function YouTubePlayer({ videoId, onTime, onState }: Props) {
       if (countdownTimerRef.current !== null) window.clearInterval(countdownTimerRef.current);
       countdownTimerRef.current = null;
       setCountdown(null);
+      if (controllerRef) controllerRef.current = null;
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [videoId, onState]);
+  }, [videoId, onState, controllerRef, state]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
