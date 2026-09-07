@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
 import { YouTubePlayer } from '@/components/youtube-player';
 import { exportMap, findMap, makeId, saveMap } from '@/lib/storage';
 import { getMap, upsertMap } from '@/lib/cloud';
@@ -47,24 +48,15 @@ export default function CreatePage() {
       if (!id) return;
       if (alive) setLoadingEdit(true);
       const local = findMap(id);
-      if (local && alive) {
-        setMap(local);
-        setCanEdit(local.authorId === 'local');
-      }
+      if (local && alive) { setMap(local); setCanEdit(local.authorId === 'local'); }
       const cloud = await getMap(id);
       if (cloud && alive) setMap(cloud);
       if (alive) setLoadingEdit(false);
     };
     const loadAuth = async () => {
-      if (!supabase) {
-        await load();
-        return;
-      }
+      if (!supabase) { await load(); return; }
       const { data } = await supabase.auth.getUser();
-      if (alive) {
-        setLoggedIn(!!data.user);
-        setUserId(data.user?.id ?? null);
-      }
+      if (alive) { setLoggedIn(!!data.user); setUserId(data.user?.id ?? null); }
       await load();
     };
     loadAuth();
@@ -73,10 +65,7 @@ export default function CreatePage() {
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get('edit');
-    if (!id) {
-      setCanEdit(true);
-      return;
-    }
+    if (!id) { setCanEdit(true); return; }
     if (map.authorId === 'local') setCanEdit(true);
     else setCanEdit(!!userId && map.authorId === userId);
   }, [map.authorId, userId]);
@@ -102,8 +91,9 @@ export default function CreatePage() {
   const updateLine = (id: string, patch: Partial<MapLine>) => {
     if (!canEdit) return;
     if (patch.startTime != null) {
-      const nextTime = Number(Math.max(0, Number(patch.startTime)).toFixed(2));
-      if (!Number.isFinite(nextTime)) return;
+      const numericTime = Number(patch.startTime);
+      if (!Number.isFinite(numericTime) || numericTime < 0) return;
+      const nextTime = Number(numericTime.toFixed(2));
       if (map.lines.some((line) => line.id !== id && Math.abs(line.startTime - nextTime) < 0.005)) {
         setSaved('同じ時刻の行は設定できません。少し時間をずらしてください。');
         return;
@@ -156,7 +146,7 @@ export default function CreatePage() {
   };
 
   return <>
-    <header className="site-header"><div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span><span>YouTube <b>Typing</b></span></Link><nav className="nav"><Link href="/search">探す</Link><Link href="/">トップ</Link>{loggedIn ? <Link href="/profile?id=me">プロフィール</Link> : <Link className="nav-accent" href="/login">ログイン</Link>}</nav></div></header>
+    <SiteHeader loggedIn={loggedIn} />
     <main className="container section create-page">
       <div className="page-head"><div><p className="eyebrow">MAP EDITOR</p><h1 className="page-title">譜面を作る</h1><p className="muted">動画を再生して「今！」の瞬間を登録します。</p></div><div className="cta-row"><button className="btn" onClick={() => fileRef.current?.click()} disabled={!canEdit}>JSON読み込み</button><input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e)=>importJson(e.target.files?.[0])}/><button className="btn" onClick={() => exportMap(map)}>JSON書き出し</button><button className="btn primary" onClick={save} disabled={!canEdit}>保存する</button></div></div>
       {loadingEdit && <p className="notice">譜面を確認しています…</p>}
