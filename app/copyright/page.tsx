@@ -25,21 +25,25 @@ export default function CopyrightPage() {
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!mapUrl.trim() || !details.trim()) {
+    const trimmedUrl = mapUrl.trim();
+    const trimmedDetails = details.trim();
+    if (!trimmedUrl || !trimmedDetails) {
       setMessage('譜面URLと申立て内容を入力してください。');
       return;
     }
-    if (!/^https?:\\/\\//i.test(mapUrl.trim())) {
-      setMessage('譜面URLは http:// または https:// から始めてください。');
+    try {
+      new URL(trimmedUrl);
+    } catch {
+      setMessage('有効な譜面URLを入力してください。');
       return;
     }
     setLoading(true);
     setMessage('');
     const result = await submitCopyrightRequest({
-      mapUrl: mapUrl.trim(),
-      mapId: extractMapId(mapUrl),
+      mapUrl: trimmedUrl,
+      mapId: extractMapId(trimmedUrl),
       reason,
-      details,
+      details: trimmedDetails,
     });
     setLoading(false);
     if (result.ok) {
