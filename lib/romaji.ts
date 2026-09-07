@@ -157,20 +157,28 @@ function inputStatus(reading: string, typed: string): { prefix: boolean; done: b
 
     for (const option of optionsAt(normalized, kanaIndex)) {
       const remaining = input.length - inputIndex;
-      if (remaining <= option.text.length) {
+      const available = input.slice(inputIndex, inputIndex + option.text.length);
+
+      // A complete romaji option can be consumed even when more input follows it.
+      // The previous implementation only handled the `remaining <= option.length`
+      // case, so accumulated strings such as "koto" failed as soon as they grew
+      // beyond the first kana's romaji length.
+      if (remaining >= option.text.length && available === option.text) {
+        const child = visit(kanaIndex + option.advance, inputIndex + option.text.length);
+        if (child.prefix || child.done) {
+          memo.set(key, child);
+          return child;
+        }
+        continue;
+      }
+
+      // Still typing the current romaji option: accept it as a valid prefix.
+      if (remaining < option.text.length) {
         const partial = input.slice(inputIndex);
         if (option.text.startsWith(partial)) {
-          const completeOption = remaining === option.text.length;
-          if (!completeOption) {
-            const result = { prefix: true, done: false };
-            memo.set(key, result);
-            return result;
-          }
-          const child = visit(kanaIndex + option.advance, input.length);
-          if (child.prefix || child.done) {
-            memo.set(key, child);
-            return child;
-          }
+          const result = { prefix: true, done: false };
+          memo.set(key, result);
+          return result;
         }
       }
     }
