@@ -2,7 +2,7 @@ import type { MapLine, TypingMap } from './types';
 import { getSupabase } from './supabase/client';
 import type { Database } from './supabase/database.types';
 
-type MapRow = { id: string; author_id: string; title: string; description: string; youtube_video_id: string; tags: string[]; visibility: string; lines: unknown; created_at: string; updated_at: string };
+type MapRow = { id: string; author_id: string; title: string; description: string; youtube_video_id: string; tags: string[]; visibility: string; lines: unknown; play_count: number; favorite_count: number; created_at: string; updated_at: string };
 
 type CopyrightRequestRow = {
   id: number;
@@ -19,14 +19,24 @@ type CopyrightRequestRow = {
 
 function normalizeLines(value: unknown): MapLine[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((line): line is Record<string, unknown> => !!line && typeof line === 'object').map((line) => ({
-    id: String(line.id ?? crypto.randomUUID()), text: String(line.text ?? ''), reading: String(line.reading ?? ''), startTime: Math.max(0, Number(line.startTime ?? 0)),
-    ...(line.endTime == null ? {} : { endTime: Math.max(0, Number(line.endTime)) }),
-  }));
+  return value
+    .filter((line): line is Record<string, unknown> => !!line && typeof line === 'object')
+    .map((line) => {
+      const startTime = Number(line.startTime ?? 0);
+      const endTime = line.endTime == null ? null : Number(line.endTime);
+      return {
+        id: String(line.id ?? crypto.randomUUID()),
+        text: String(line.text ?? ''),
+        reading: String(line.reading ?? ''),
+        startTime: Number.isFinite(startTime) ? Math.max(0, startTime) : 0,
+        ...(endTime == null ? {} : { endTime: Number.isFinite(endTime) ? Math.max(0, endTime) : 0 }),
+      };
+    })
+    .filter((line) => !!line.text && !!line.reading);
 }
 
 export function rowToMap(row: MapRow): TypingMap {
-  return { id: row.id, authorId: row.author_id, title: row.title, description: row.description, youtubeVideoId: row.youtube_video_id, tags: row.tags ?? [], visibility: row.visibility as TypingMap['visibility'], createdAt: row.created_at, updatedAt: row.updated_at, lines: normalizeLines(row.lines) };
+  return { id: row.id, authorId: row.author_id, title: row.title, description: row.description, youtubeVideoId: row.youtube_video_id, tags: row.tags ?? [], visibility: row.visibility as TypingMap['visibility'], createdAt: row.created_at, updatedAt: row.updated_at, playCount: Number.isFinite(Number(row.play_count)) ? Number(row.play_count) : 0, lines: normalizeLines(row.lines) };
 }
 
 export function mapToRow(map: TypingMap, authorId: string) {
