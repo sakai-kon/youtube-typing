@@ -4,6 +4,7 @@ import Link from 'next/link';
 
 interface SiteHeaderProps {
   loggedIn: boolean;
+  compact?: boolean;
 }
 
 export function SiteHeader({ loggedIn }: SiteHeaderProps) {
