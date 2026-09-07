@@ -6,6 +6,7 @@ import { getSupabase } from '@/lib/supabase/client';
 
 interface SiteHeaderProps {
   loggedIn?: boolean;
+  compact?: boolean;
 }
 
 export function SiteHeader({ loggedIn: loggedInProp }: SiteHeaderProps) {
