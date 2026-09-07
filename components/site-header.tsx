@@ -4,10 +4,9 @@ import Link from 'next/link';
 
 interface SiteHeaderProps {
   loggedIn: boolean;
-  compact?: boolean;
 }
 
-export function SiteHeader({ loggedIn, compact = false }: SiteHeaderProps) {
+export function SiteHeader({ loggedIn }: SiteHeaderProps) {
   return (
     <>
       <header className="site-header unified-header">
@@ -22,7 +21,7 @@ export function SiteHeader({ loggedIn, compact = false }: SiteHeaderProps) {
           </div>
 
           <div className="unified-header-right">
-            {!compact && <nav className="unified-nav"><Link href="/search">探す</Link><Link href="/create">譜面を作る</Link></nav>}
+            <nav className="unified-nav"><Link href="/search">探す</Link><Link href="/play">プレイ</Link><Link href="/create">譜面を作る</Link></nav>
             <button className="unified-header-control" type="button">日本語</button>
             <button className="unified-icon-btn" type="button" aria-label="テーマ切り替え">◐</button>
             <button className="unified-icon-btn" type="button" aria-label="通知">♢</button>
