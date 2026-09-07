@@ -37,13 +37,5 @@ export function YouTubePlayer({ videoId, onTime, onState, compact = false }: Pro
   }, [videoId, onState]);
   useEffect(() => { const timer = window.setInterval(() => { const current = playerRef.current?.getCurrentTime?.(); if (typeof current === 'number' && Number.isFinite(current)) { setTime(current); onTime?.(current); } }, 100); return () => window.clearInterval(timer); }, [onTime]);
   const jump = (delta: number) => playerRef.current?.seekTo(Math.max(0, time + delta), true);
-  return (
-    <div className={`yt-wrap${compact ? ' compact-player' : ''}`}>
-      <div className={compact ? 'yt-frame compact play-video-compact' : 'yt-frame'} ref={hostRef} />
-      <div className="yt-controls"><span className="timecode">{time.toFixed(2)}s</span><button onClick={() => playerRef.current?.playVideo()} type="button">▶ 再生</button><button onClick={() => playerRef.current?.pauseVideo()} type="button">⏸ 一時停止</button><button onClick={() => jump(-0.1)} type="button">−0.1s</button><button onClick={() => jump(0.1)} type="button">＋0.1s</button><span className="player-state">{state}</span></div>
-      <style jsx>{`
-        .play-video-compact{width:min(660px,100%) !important;margin:0 auto;height:auto;aspect-ratio:16/9 !important}
-      `}</style>
-    </div>
-  );
+  return <div className="yt-wrap"><div className={compact ? 'yt-frame compact' : 'yt-frame'} ref={hostRef} /><div className="yt-controls"><span className="timecode">{time.toFixed(2)}s</span><button onClick={() => playerRef.current?.playVideo()} type="button">▶ 再生</button><button onClick={() => playerRef.current?.pauseVideo()} type="button">⏸ 一時停止</button><button onClick={() => jump(-0.1)} type="button">−0.1s</button><button onClick={() => jump(0.1)} type="button">＋0.1s</button><span className="player-state">{state}</span></div></div>;
 }
