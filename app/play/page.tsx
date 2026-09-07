@@ -40,6 +40,13 @@ export default function PlayPage() {
   const recordedRef = useRef(false);
   const typedRef = useRef('');
   const playerControllerRef = useRef<PlayerControl | null>(null);
+  const linesRef = useRef<typeof map extends null ? never : TypingMap['lines']>([]);
+  const activeIndexRef = useRef(0);
+  const currentRef = useRef<TypingMap['lines'][number] | undefined>(undefined);
+  const nextLineRef = useRef<TypingMap['lines'][number] | undefined>(undefined);
+  const pausedRef = useRef(false);
+  const finishedRef = useRef(false);
+  const startedAtRef = useRef<number | null>(null);
 
   useEffect(() => { setMapId(new URLSearchParams(window.location.search).get('id') ?? ''); }, []);
 
@@ -65,6 +72,13 @@ export default function PlayPage() {
   const lines = useMemo(() => map ? [...map.lines].sort((a, b) => a.startTime - b.startTime) : [], [map]);
   const current = lines[activeIndex];
   const nextLine = lines[activeIndex + 1];
+  linesRef.current = lines;
+  activeIndexRef.current = activeIndex;
+  currentRef.current = current;
+  nextLineRef.current = nextLine;
+  pausedRef.current = paused;
+  finishedRef.current = finished;
+  startedAtRef.current = startedAt;
   const songProgress = lines.length ? (activeIndex / Math.max(lines.length - 1, 1)) * 100 : 0;
   const inputProgress = current ? (typed.length / Math.max(romajiVariants(current.reading, 1)[0]?.length || 1, 1)) * 100 : 0;
   const combo = Math.max(0, acceptedChars - misses);
@@ -85,13 +99,14 @@ export default function PlayPage() {
 
   const finishLine = useCallback(() => {
     typedRef.current = '';
-    if (activeIndex >= lines.length - 1) setFinished(true);
+    const index = activeIndexRef.current;
+    if (index >= linesRef.current.length - 1) setFinished(true);
     else {
       setActiveIndex((i) => i + 1);
       setTyped('');
       setLastKeyOk(null);
     }
-  }, [activeIndex, lines.length]);
+  }, []);
 
   const togglePause = useCallback(() => {
     const nextPaused = playerControllerRef.current?.togglePause();
@@ -116,21 +131,23 @@ export default function PlayPage() {
   }, []);
 
   const changeLine = useCallback((delta: number) => {
-    if (!lines.length) return;
+    const currentLines = linesRef.current;
+    if (!currentLines.length) return;
     setActiveIndex((currentIndex) => {
-      const nextIndex = Math.max(0, Math.min(lines.length - 1, currentIndex + delta));
-      const target = lines[nextIndex];
+      const nextIndex = Math.max(0, Math.min(currentLines.length - 1, currentIndex + delta));
+      const target = currentLines[nextIndex];
       typedRef.current = '';
       setTyped('');
       setLastKeyOk(null);
       playerControllerRef.current?.seek(target.startTime);
       return nextIndex;
     });
-  }, [lines]);
+  }, []);
 
   const resetGame = useCallback(() => {
     recordedRef.current = false;
     typedRef.current = '';
+    startedAtRef.current = null;
     setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
     setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
     setPlaybackRate(1); setVolume(100);
@@ -140,8 +157,9 @@ export default function PlayPage() {
   }, []);
 
   useEffect(() => {
-    if (!current || finished) return;
     const handler = (event: KeyboardEvent) => {
+      const line = currentRef.current;
+
       if (event.key === 'Escape') {
         event.preventDefault();
         togglePause();
@@ -189,16 +207,18 @@ export default function PlayPage() {
       }
       if (event.key === ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {
         event.preventDefault();
-        if (!paused && nextLine) {
+        const next = nextLineRef.current;
+        if (!pausedRef.current && next) {
           typedRef.current = '';
           setTyped('');
           setLastKeyOk(null);
-          setActiveIndex(activeIndex + 1);
-          playerControllerRef.current?.seek(nextLine.startTime);
+          const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1);
+          setActiveIndex(nextIndex);
+          playerControllerRef.current?.seek(next.startTime);
         }
         return;
       }
-      if (paused || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (pausedRef.current || finishedRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key !== 'Backspace' && event.key.length !== 1) return;
       event.preventDefault();
 
@@ -208,9 +228,13 @@ export default function PlayPage() {
         return;
       }
 
-      if (startedAt === null) setStartedAt(Date.now());
+      if (startedAtRef.current === null) {
+        const now = Date.now();
+        startedAtRef.current = now;
+        setStartedAt(now);
+      }
       const proposed = typedRef.current + event.key.toLowerCase();
-      const result = nextInputState(current.reading, proposed);
+      const result = nextInputState(line.reading, proposed);
       setLastKeyOk(result.status === 'correct');
 
       if (result.status === 'correct') {
@@ -222,9 +246,10 @@ export default function PlayPage() {
         setMisses((value) => value + 1);
       }
     };
+
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [current, activeIndex, changeLine, changeSpeed, changeVolume, finishLine, finished, nextLine, paused, resetGame, startedAt, togglePause]);
+  }, [changeLine, changeSpeed, changeVolume, finishLine, resetGame, togglePause]);
 
   useEffect(() => {
     if (!finished || !map || !loggedIn || recordedRef.current) return;
@@ -311,7 +336,7 @@ export default function PlayPage() {
             <button onClick={() => changeSpeed(-0.25)}><span>速度↓</span><kbd>F9</kbd></button>
             <button onClick={() => changeLine(1)}><span>次ライン</span><kbd>Ctrl+→</kbd></button>
             <button onClick={() => { typedRef.current = ''; setTyped(''); }}><span>戻る</span><kbd>BS</kbd></button>
-            <button onClick={() => { if (nextLine && !paused) { typedRef.current = ''; setTyped(''); setLastKeyOk(null); setActiveIndex(activeIndex + 1); playerControllerRef.current?.seek(nextLine.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>
+            <button onClick={() => { const next = nextLineRef.current; if (next && !pausedRef.current) { typedRef.current = ''; setTyped(''); setLastKeyOk(null); const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1); setActiveIndex(nextIndex); playerControllerRef.current?.seek(next.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>
           </div>
           {paused && <div className="pause-chip">PAUSED · Escで再開</div>}
         </section>
