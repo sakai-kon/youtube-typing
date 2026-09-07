@@ -27,7 +27,7 @@ function loadYouTubeApi(): Promise<YTGlobal> {
   return apiPromise;
 }
 
-export function YouTubePlayer({ videoId, onTime, onState, compact = false }: Props) {
+export function YouTubePlayer({ videoId, onTime, onState }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
   const countdownTimerRef = useRef<number | null>(null);
@@ -97,7 +97,7 @@ export function YouTubePlayer({ videoId, onTime, onState, compact = false }: Pro
 
   return (
     <div className="yt-wrap">
-      <div className={compact ? 'yt-frame compact' : 'yt-frame'} ref={hostRef} />
+      <div className="yt-frame" ref={hostRef} />
       {countdown !== null && <div className="yt-countdown" aria-live="assertive">{countdown}</div>}
       <div className="yt-controls">
         <span className="timecode">{time.toFixed(2)}s</span>
