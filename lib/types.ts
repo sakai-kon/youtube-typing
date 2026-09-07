@@ -18,5 +18,6 @@ export type TypingMap = {
   visibility: Visibility;
   createdAt: string;
   updatedAt: string;
+  playCount?: number;
   lines: MapLine[];
 };
