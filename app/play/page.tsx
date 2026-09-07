@@ -10,6 +10,15 @@ import { nextInputState, romajiVariants } from '@/lib/romaji';
 import { getSupabase } from '@/lib/supabase/client';
 import type { TypingMap } from '@/lib/types';
 
+type PlayerControl = {
+  play: () => void;
+  pause: () => void;
+  togglePause: () => boolean;
+  seek: (seconds: number) => void;
+  setPlaybackRate: (rate: number) => void;
+  setVolume: (volume: number) => void;
+};
+
 export default function PlayPage() {
   const [map, setMap] = useState<TypingMap | null>(null);
   const [mapId, setMapId] = useState('');
@@ -26,8 +35,11 @@ export default function PlayPage() {
   const [reportOpen, setReportOpen] = useState(false);
   const [reportMessage, setReportMessage] = useState('');
   const [paused, setPaused] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(1);
+  const [volume, setVolume] = useState(100);
   const recordedRef = useRef(false);
   const typedRef = useRef('');
+  const playerControllerRef = useRef<PlayerControl | null>(null);
 
   useEffect(() => { setMapId(new URLSearchParams(window.location.search).get('id') ?? ''); }, []);
 
@@ -79,11 +91,99 @@ export default function PlayPage() {
     }
   }, [activeIndex, lines.length]);
 
+  const togglePause = useCallback(() => {
+    const nextPaused = playerControllerRef.current?.togglePause();
+    if (typeof nextPaused === 'boolean') setPaused(nextPaused);
+    else setPaused((value) => !value);
+  }, []);
+
+  const changeSpeed = useCallback((delta: number) => {
+    setPlaybackRate((currentRate) => {
+      const nextRate = Math.max(0.25, Math.min(2, Number((currentRate + delta).toFixed(2))));
+      playerControllerRef.current?.setPlaybackRate(nextRate);
+      return nextRate;
+    });
+  }, []);
+
+  const changeVolume = useCallback((delta: number) => {
+    setVolume((currentVolume) => {
+      const nextVolume = Math.max(0, Math.min(100, currentVolume + delta));
+      playerControllerRef.current?.setVolume(nextVolume);
+      return nextVolume;
+    });
+  }, []);
+
+  const changeLine = useCallback((delta: number) => {
+    if (!lines.length) return;
+    setActiveIndex((currentIndex) => {
+      const nextIndex = Math.max(0, Math.min(lines.length - 1, currentIndex + delta));
+      const target = lines[nextIndex];
+      typedRef.current = '';
+      setTyped('');
+      setLastKeyOk(null);
+      playerControllerRef.current?.seek(target.startTime);
+      return nextIndex;
+    });
+  }, [lines]);
+
   useEffect(() => {
     if (!current || finished || paused) return;
     const handler = (event: KeyboardEvent) => {
-      if (event.key.length !== 1 && event.key !== 'Backspace') return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
+
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        togglePause();
+        return;
+      }
+      if (event.key === ' ') {
+        event.preventDefault();
+        if (nextLine) {
+          const nextIndex = activeIndex + 1;
+          typedRef.current = '';
+          setTyped('');
+          setLastKeyOk(null);
+          setActiveIndex(nextIndex);
+          playerControllerRef.current?.seek(nextLine.startTime);
+        }
+        return;
+      }
+      if (event.key === 'F10') {
+        event.preventDefault();
+        changeSpeed(0.25);
+        return;
+      }
+      if (event.key === 'F9') {
+        event.preventDefault();
+        changeSpeed(-0.25);
+        return;
+      }
+      if (event.key === 'F4') {
+        event.preventDefault();
+        resetGame();
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        changeVolume(5);
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        changeVolume(-5);
+        return;
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        changeLine(event.shiftKey ? -1 : 0);
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        changeLine(event.shiftKey ? 1 : 0);
+        return;
+      }
+      if (event.key.length !== 1 && event.key !== 'Backspace') return;
       event.preventDefault();
 
       if (event.key === 'Backspace') {
@@ -108,7 +208,7 @@ export default function PlayPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [current, finishLine, finished, paused, startedAt]);
+  }, [current, activeIndex, changeLine, changeSpeed, changeVolume, finishLine, finished, nextLine, paused, startedAt, togglePause]);
 
   useEffect(() => {
     if (!finished || !map || !loggedIn || recordedRef.current) return;
@@ -120,34 +220,36 @@ export default function PlayPage() {
   }, [finished, map, loggedIn, startedAt, acceptedChars, misses]);
 
   useEffect(() => {
+    if (!lines.length) return;
+    if (activeIndex >= lines.length) setActiveIndex(lines.length - 1);
+  }, [activeIndex, lines.length]);
+
+  const resetGame = useCallback(() => {
+    recordedRef.current = false;
+    typedRef.current = '';
+    setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
+    setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
+    setPlaybackRate(1); setVolume(100);
+    playerControllerRef.current?.setPlaybackRate(1);
+    playerControllerRef.current?.setVolume(100);
+    playerControllerRef.current?.seek(0);
+  }, []);
+
+  useEffect(() => {
     const handler = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); setPaused((value) => !value); }
+      if (event.key === 'F7') {
+        event.preventDefault();
+        setPaused((value) => !value);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const reset = () => {
-    recordedRef.current = false;
-    typedRef.current = '';
-    setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
-    setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
-  };
-
-  const handleFavorite = async () => {
-    const result = await toggleFavorite(map?.id ?? '');
-    if (result.ok) setFavorite(result.favorite);
-    else if (!loggedIn) window.alert('お気に入りにはログインが必要です。');
-  };
-
-  const handleReport = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!map) return;
-    const form = new FormData(event.currentTarget);
-    const result = await submitReport(map.id, String(form.get('reason') ?? ''), String(form.get('details') ?? ''));
-    setReportMessage(result.ok ? '通報を受け付けました。' : (result.error ?? '通報に失敗しました。'));
-    if (result.ok) event.currentTarget.reset();
-  };
+  const handlePlayerState = useCallback((state: string) => {
+    if (state === 'paused') setPaused(true);
+    if (state === 'playing') setPaused(false);
+  }, []);
 
   const elapsed = startedAt ? Math.max((Date.now() - startedAt) / 1000 / 60, 1 / 60) : 0;
   const kpm = elapsed ? Math.round(acceptedChars / elapsed) : 0;
@@ -168,7 +270,7 @@ export default function PlayPage() {
         </div>
 
         <section className="game-video-card">
-          {map ? <YouTubePlayer videoId={map.youtubeVideoId} onTime={setYtTime} compact /> : <div className="game-video-placeholder"><span>譜面を読み込んでいます…</span></div>}
+          {map ? <YouTubePlayer videoId={map.youtubeVideoId} onTime={setYtTime} onState={handlePlayerState} controllerRef={playerControllerRef} compact /> : <div className="game-video-placeholder"><span>譜面を読み込んでいます…</span></div>}
         </section>
 
         <section className="gameplay-panel">
@@ -195,24 +297,24 @@ export default function PlayPage() {
           </div>
 
           <div className="game-keyboard">
-            <button onClick={() => setPaused((v) => !v)}><span>一時停止</span><kbd>Esc</kbd></button>
-            <button><span>速度: 1.00x</span><kbd>F10</kbd></button>
-            <button><span>調整: +0.0</span><kbd>←→</kbd></button>
-            <button><span>音量</span><kbd>↑↓</kbd></button>
-            <button><span>自動スキップ</span><kbd>Shift+↑↓</kbd></button>
-            <button onClick={reset}><span>やり直し</span><kbd>F4</kbd></button>
-            <button><span>練習</span><kbd>F7</kbd></button>
-            <button><span>速度↓</span><kbd>F9</kbd></button>
-            <button><span>前/次ライン</span><kbd>Ctrl+←→</kbd></button>
+            <button onClick={togglePause}><span>{paused ? '再開' : '一時停止'}</span><kbd>Esc</kbd></button>
+            <button onClick={() => changeSpeed(0.25)}><span>速度: {playbackRate.toFixed(2)}x</span><kbd>F10</kbd></button>
+            <button onClick={() => setYtTime((value) => Math.max(0, value))}><span>調整: +0.0</span><kbd>←→</kbd></button>
+            <button onClick={() => changeVolume(5)}><span>音量: {volume}%</span><kbd>↑↓</kbd></button>
+            <button onClick={() => setPaused((v) => !v)}><span>自動スキップ</span><kbd>Shift+↑↓</kbd></button>
+            <button onClick={resetGame}><span>やり直し</span><kbd>F4</kbd></button>
+            <button onClick={() => setPaused((v) => !v)}><span>練習</span><kbd>F7</kbd></button>
+            <button onClick={() => changeSpeed(-0.25)}><span>速度↓</span><kbd>F9</kbd></button>
+            <button onClick={() => changeLine(1)}><span>前/次ライン</span><kbd>Ctrl+←→</kbd></button>
             <button onClick={() => { typedRef.current = ''; setTyped(''); }}><span>戻る</span><kbd>BS</kbd></button>
-            <button><span>Space でスキップ</span><kbd>Space</kbd></button>
+            <button onClick={() => { if (nextLine) { typedRef.current = ''; setTyped(''); setActiveIndex(activeIndex + 1); playerControllerRef.current?.seek(nextLine.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>
           </div>
           {paused && <div className="pause-chip">PAUSED · Escで再開</div>}
         </section>
 
         <div className="play-metrics gameplay-metrics"><span>動画 {ytTime.toFixed(2)}s</span><span>ミス {misses}</span><span>KPM {kpm}</span><span>精度 {accuracy}%</span></div>
 
-        {finished && <section className="play-stage result-stage"><div className="complete-badge">COMPLETE</div><div className="play-text">おつかれさまでした！</div><p className="muted">今回のプレイ結果</p><div className="result"><div className="stat"><b>{misses}</b><span>ミス</span></div><div className="stat"><b>{kpm}</b><span>KPM</span></div><div className="stat"><b>{accuracy}%</b><span>精度</span></div><div className="stat"><b>{lines.length}</b><span>行数</span></div></div><div className="cta-row"><button className="btn primary" onClick={reset}>もう一度プレイ</button><Link className="btn" href="/">トップへ</Link></div></section>}
+        {finished && <section className="play-stage result-stage"><div className="complete-badge">COMPLETE</div><div className="play-text">おつかれさまでした！</div><p className="muted">今回のプレイ結果</p><div className="result"><div className="stat"><b>{misses}</b><span>ミス</span></div><div className="stat"><b>{kpm}</b><span>KPM</span></div><div className="stat"><b>{accuracy}%</b><span>精度</span></div><div className="stat"><b>{lines.length}</b><span>行数</span></div></div><div className="cta-row"><button className="btn primary" onClick={resetGame}>もう一度プレイ</button><Link className="btn" href="/">トップへ</Link></div></section>}
         {reportOpen && map && <section className="card report-panel" style={{ marginTop: 16 }}><h2>譜面を通報</h2><form className="form" onSubmit={handleReport}><div className="field"><label>理由</label><select name="reason" required><option value="copyright">権利・著作権に関する問題</option><option value="inappropriate">不適切な内容</option><option value="spam">スパム</option><option value="other">その他</option></select></div><div className="field"><label>詳細</label><textarea name="details" maxLength={5000} placeholder="問題の内容を入力してください" /></div><button className="btn primary" disabled={!loggedIn}>通報を送信</button>{!loggedIn && <p className="muted">通報にはログインが必要です。</p>}{reportMessage && <p className="notice">{reportMessage}</p>}</form></section>}
       </main>
 
