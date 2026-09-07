@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
 import type { TypingMap } from '@/lib/types';
 import { loadMaps } from '@/lib/storage';
 import { getPublicMaps } from '@/lib/cloud';
@@ -27,9 +28,7 @@ export default function Home() {
   const totalLines = maps.reduce((sum, map) => sum + map.lines.length, 0);
 
   return <>
-    <header className="site-header">
-      <div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span><span>YouTube <b>Typing</b></span></Link><nav className="nav"><Link href="/search">探す</Link><Link href="/play">プレイ画面</Link><Link href="/create">譜面を作る</Link>{loggedIn ? <Link href="/profile?id=me">プロフィール</Link> : <Link className="nav-accent" href="/login">ログイン</Link>}</nav></div>
-    </header>
+    <SiteHeader loggedIn={loggedIn} />
     <main>
       <section className="hero container">
         <div className="hero-copy"><div className="eyebrow">YOUTUBE × TYPING</div><h1>動画の「今」を、<br/><span>打ち込むゲーム。</span></h1><p>YouTubeを再生しながら、自分で譜面を作る。あとはタイミングに合わせてローマ字で打つだけ。練習にも、遊びにも。</p><div className="cta-row hero-actions"><Link className="btn primary btn-large" href="/search">すぐ遊ぶ <span>→</span></Link><Link className="btn btn-large" href="/play">プレイ画面を見る</Link><Link className="btn btn-large" href="/create">譜面を作る</Link></div><div className="hero-note"><span className="status-dot"/>ブラウザだけで動作　・　AI判定なし　・　入力コスト0</div></div>
