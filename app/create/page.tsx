@@ -14,6 +14,19 @@ function videoIdFromUrl(value: string): string {
 }
 const blank = (): TypingMap => ({ id: makeId(), authorId: 'local', title: '', description: '', youtubeVideoId: '', tags: [], visibility: 'private', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), lines: [] });
 
+function isValidImportedMap(value: unknown): value is TypingMap {
+  if (!value || typeof value !== 'object') return false;
+  const map = value as Partial<TypingMap>;
+  if (typeof map.title !== 'string' || !map.title.trim()) return false;
+  if (typeof map.youtubeVideoId !== 'string' || !map.youtubeVideoId.trim()) return false;
+  if (!Array.isArray(map.lines)) return false;
+  return map.lines.every((line) => {
+    if (!line || typeof line !== 'object') return false;
+    const item = line as Partial<MapLine>;
+    return typeof item.text === 'string' && !!item.text.trim() && typeof item.reading === 'string' && !!item.reading.trim() && Number.isFinite(Number(item.startTime)) && Number(item.startTime) >= 0 && (item.endTime == null || (Number.isFinite(Number(item.endTime)) && Number(item.endTime) >= 0));
+  });
+}
+
 export default function CreatePage() {
   const [map, setMap] = useState<TypingMap>(blank);
   const [time, setTime] = useState(0);
@@ -84,12 +97,26 @@ export default function CreatePage() {
   };
   const addLine = () => {
     if (!canEdit || !text.trim() || !reading.trim()) return;
-    const line: MapLine = { id: makeId(), text: text.trim(), reading: reading.trim(), startTime: Number(time.toFixed(2)) };
+    const startTime = Number(time.toFixed(2));
+    if (map.lines.some((line) => Math.abs(line.startTime - startTime) < 0.005)) {
+      setSaved('同じ時刻の行は登録できません。少し時間をずらしてください。');
+      return;
+    }
+    const line: MapLine = { id: makeId(), text: text.trim(), reading: reading.trim(), startTime };
     setMap((m) => ({ ...m, lines: [...m.lines, line], updatedAt: new Date().toISOString() }));
     setText(''); setReading(''); setSaved('');
   };
   const updateLine = (id: string, patch: Partial<MapLine>) => {
     if (!canEdit) return;
+    if (patch.startTime != null) {
+      const nextTime = Number(Math.max(0, Number(patch.startTime)).toFixed(2));
+      if (!Number.isFinite(nextTime)) return;
+      if (map.lines.some((line) => line.id !== id && Math.abs(line.startTime - nextTime) < 0.005)) {
+        setSaved('同じ時刻の行は設定できません。少し時間をずらしてください。');
+        return;
+      }
+      patch = { ...patch, startTime: nextTime };
+    }
     setMap((m) => ({ ...m, lines: m.lines.map((line) => line.id === id ? { ...line, ...patch } : line), updatedAt: new Date().toISOString() }));
     setSaved('');
   };
@@ -101,13 +128,14 @@ export default function CreatePage() {
   const save = async () => {
     if (!canEdit) { setSaved('この譜面は作者のみ編集できます。'); return; }
     if (!map.title.trim() || !ready || !map.lines.length) { setSaved('タイトル・動画・1行以上の譜面が必要です。'); return; }
-    saveMap(map);
+    const saveTarget = !loggedIn && map.visibility !== 'private' ? { ...map, visibility: 'private' as const } : map;
+    saveMap(saveTarget);
     if (loggedIn) {
       const result = await upsertMap(map);
       setSaved(result.ok ? '保存しました。公開設定に応じて共有できます。' : `ローカルには保存しました：${result.error ?? '保存に失敗しました。'}`);
     } else if (map.visibility !== 'private') {
-      setSaved('ゲストは公開できません。ログインするとSupabaseへ公開保存できます。');
-      setMap((m) => ({ ...m, visibility: 'private' }));
+      setMap(saveTarget);
+      setSaved('ゲストとして保存できるのは非公開のみです。ローカルには非公開で保存しました。');
     } else setSaved('このブラウザに保存しました。');
   };
   const importJson = (file?: File) => {
@@ -115,11 +143,21 @@ export default function CreatePage() {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const imported = JSON.parse(String(reader.result)) as TypingMap;
-        if (!imported.title || !imported.youtubeVideoId || !Array.isArray(imported.lines)) throw new Error('invalid');
-        setMap({ ...imported, id: makeId(), authorId: loggedIn && userId ? userId : 'local', updatedAt: new Date().toISOString() });
+        const imported = JSON.parse(String(reader.result)) as unknown;
+        if (!isValidImportedMap(imported)) throw new Error('invalid');
+        const normalizedLines = imported.lines.map((line) => ({
+          ...line,
+          id: line.id || makeId(),
+          text: line.text.trim(),
+          reading: line.reading.trim(),
+          startTime: Number(Number(line.startTime).toFixed(2)),
+          ...(line.endTime == null ? {} : { endTime: Number(Number(line.endTime).toFixed(2)) }),
+        }));
+        const uniqueTimes = new Set(normalizedLines.map((line) => line.startTime.toFixed(2)));
+        if (uniqueTimes.size !== normalizedLines.length) throw new Error('duplicate-time');
+        setMap({ ...imported, id: makeId(), authorId: loggedIn && userId ? userId : 'local', visibility: loggedIn ? imported.visibility : 'private', lines: normalizedLines, updatedAt: new Date().toISOString() });
         setSaved('');
-      } catch { window.alert('有効な譜面JSONではありません。'); }
+      } catch (error) { window.alert(error instanceof Error && error.message === 'duplicate-time' ? '同じ開始時刻の行が含まれているため読み込めません。' : '有効な譜面JSONではありません。'); }
     };
     reader.readAsText(file);
   };
@@ -140,7 +178,7 @@ export default function CreatePage() {
         </div>
         <div className="editor-grid" style={{marginTop:18}}>
           <section className="card"><div className="card-topline"><div><p className="eyebrow">VIDEO</p><h2 style={{margin:0}}>タイミング登録</h2></div><span className="timecode">{time.toFixed(2)}s</span></div>{ready ? <YouTubePlayer videoId={map.youtubeVideoId} onTime={setTime} /> : <div className="empty">YouTube URLを入力すると、ここに動画が表示されます。</div>}<div className="notice" style={{marginTop:12}}><b>現在時刻 {time.toFixed(2)}秒</b><span style={{display:'block',fontSize:12,marginTop:4,color:'var(--muted)'}}>動画を止めずに文章と読みを入力して、その瞬間で登録できます。</span></div><div className="form" style={{marginTop:12}}><div className="field"><label>表示する文章</label><input value={text} onChange={(e)=>setText(e.target.value)} placeholder="今日も一日頑張ろう" /></div><div className="field"><label>読み（ひらがな推奨）</label><input value={reading} onChange={(e)=>setReading(e.target.value)} placeholder="きょうもいちにちがんばろう" /></div><button className="btn primary" type="button" onClick={addLine} disabled={!ready || !text.trim() || !reading.trim()}>＋ 現在時刻を登録</button></div></section>
-          <section className="card"><div className="toolbar"><div><p className="eyebrow">TIMELINE</p><h2 style={{margin:0}}>登録済み</h2></div><span className="spacer"/><span className="muted">{sorted.length} 行</span></div><div className="line-list" style={{marginTop:10}}>{sorted.map((line, idx)=><div className="line-item" key={line.id}><div className="line-num">{String(idx+1).padStart(2,'0')}</div><div className="line-main"><strong>{line.text}</strong><small>{line.reading}</small><div className="meta"><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number(Math.max(0,line.startTime-0.1).toFixed(2))})}>−0.1</button><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number((line.startTime+0.1).toFixed(2))})}>＋0.1</button><input aria-label="開始時間" type="number" min="0" step="0.01" value={line.startTime} onChange={(e)=>updateLine(line.id,{startTime:Math.max(0,Number(e.target.value))})} style={{width:92,background:'#0b0f15',border:'1px solid var(--line)',borderRadius:7,color:'var(--text)',padding:'5px 7px'}} /></div></div><div className="line-actions"><span className="line-time">{line.startTime.toFixed(2)}s</span><button className="icon-btn" onClick={()=>removeLine(line.id)}>削除</button></div></div>)}{!sorted.length && <div className="empty">まだ行がありません。動画を再生しながら右側へ追加していきます。</div>}</div></section>
+          <section className="card"><div className="toolbar"><div><p className="eyebrow">TIMELINE</p><h2 style={{margin:0}}>登録済み</h2></div><span className="spacer"/><span className="muted">{sorted.length} 行</span></div><div className="line-list" style={{marginTop:10}}>{sorted.map((line, idx)=><div className="line-item" key={line.id}><div className="line-num">{String(idx+1).padStart(2,'0')}</div><div className="line-main"><strong>{line.text}</strong><small>{line.reading}</small><div className="meta"><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number(Math.max(0,line.startTime-0.1).toFixed(2))})}>−0.1</button><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number((line.startTime+0.1).toFixed(2))}>＋0.1</button><input aria-label="開始時間" type="number" min="0" step="0.01" value={line.startTime} onChange={(e)=>updateLine(line.id,{startTime:Math.max(0,Number(e.target.value))})} style={{width:92,background:'#0b0f15',border:'1px solid var(--line)',borderRadius:7,color:'var(--text)',padding:'5px 7px'}} /></div></div><div className="line-actions"><span className="line-time">{line.startTime.toFixed(2)}s</span><button className="icon-btn" onClick={()=>removeLine(line.id)}>削除</button></div></div>)}{!sorted.length && <div className="empty">まだ行がありません。動画を再生しながら右側へ追加していきます。</div>}</div></section>
         </div>
       </>}
     </main>
