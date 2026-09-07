@@ -126,26 +126,33 @@ export default function PlayPage() {
     });
   }, [lines]);
 
-  useEffect(() => {
-    if (!current || finished || paused) return;
-    const handler = (event: KeyboardEvent) => {
-      if (event.ctrlKey || event.metaKey || event.altKey) return;
+  const resetGame = useCallback(() => {
+    recordedRef.current = false;
+    typedRef.current = '';
+    setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
+    setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
+    setPlaybackRate(1); setVolume(100);
+    playerControllerRef.current?.setPlaybackRate(1);
+    playerControllerRef.current?.setVolume(100);
+    playerControllerRef.current?.seek(0);
+  }, []);
 
+  useEffect(() => {
+    if (!current || finished) return;
+    const handler = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
         togglePause();
         return;
       }
-      if (event.key === ' ') {
+      if (event.key === 'F4') {
         event.preventDefault();
-        if (nextLine) {
-          const nextIndex = activeIndex + 1;
-          typedRef.current = '';
-          setTyped('');
-          setLastKeyOk(null);
-          setActiveIndex(nextIndex);
-          playerControllerRef.current?.seek(nextLine.startTime);
-        }
+        resetGame();
+        return;
+      }
+      if (event.key === 'F7') {
+        event.preventDefault();
+        togglePause();
         return;
       }
       if (event.key === 'F10') {
@@ -158,11 +165,6 @@ export default function PlayPage() {
         changeSpeed(-0.25);
         return;
       }
-      if (event.key === 'F4') {
-        event.preventDefault();
-        resetGame();
-        return;
-      }
       if (event.key === 'ArrowUp') {
         event.preventDefault();
         changeVolume(5);
@@ -173,17 +175,29 @@ export default function PlayPage() {
         changeVolume(-5);
         return;
       }
-      if (event.key === 'ArrowLeft') {
+      if (event.ctrlKey && event.key === 'ArrowLeft') {
         event.preventDefault();
-        changeLine(event.shiftKey ? -1 : 0);
+        changeLine(-1);
         return;
       }
-      if (event.key === 'ArrowRight') {
+      if (event.ctrlKey && event.key === 'ArrowRight') {
         event.preventDefault();
-        changeLine(event.shiftKey ? 1 : 0);
+        changeLine(1);
         return;
       }
-      if (event.key.length !== 1 && event.key !== 'Backspace') return;
+      if (event.key === ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        if (!paused && nextLine) {
+          typedRef.current = '';
+          setTyped('');
+          setLastKeyOk(null);
+          setActiveIndex(activeIndex + 1);
+          playerControllerRef.current?.seek(nextLine.startTime);
+        }
+        return;
+      }
+      if (paused || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key !== 'Backspace' && event.key.length !== 1) return;
       event.preventDefault();
 
       if (event.key === 'Backspace') {
@@ -208,7 +222,7 @@ export default function PlayPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [current, activeIndex, changeLine, changeSpeed, changeVolume, finishLine, finished, nextLine, paused, startedAt, togglePause]);
+  }, [current, activeIndex, changeLine, changeSpeed, changeVolume, finishLine, finished, nextLine, paused, resetGame, startedAt, togglePause]);
 
   useEffect(() => {
     if (!finished || !map || !loggedIn || recordedRef.current) return;
@@ -218,33 +232,6 @@ export default function PlayPage() {
     const accuracy = Math.round((acceptedChars / Math.max(acceptedChars + misses, 1)) * 100);
     void recordPlay(map.id, accuracy, misses, kpm);
   }, [finished, map, loggedIn, startedAt, acceptedChars, misses]);
-
-  useEffect(() => {
-    if (!lines.length) return;
-    if (activeIndex >= lines.length) setActiveIndex(lines.length - 1);
-  }, [activeIndex, lines.length]);
-
-  const resetGame = useCallback(() => {
-    recordedRef.current = false;
-    typedRef.current = '';
-    setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
-    setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
-    setPlaybackRate(1); setVolume(100);
-    playerControllerRef.current?.setPlaybackRate(1);
-    playerControllerRef.current?.setVolume(100);
-    playerControllerRef.current?.seek(0);
-  }, []);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (event.key === 'F7') {
-        event.preventDefault();
-        setPaused((value) => !value);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
 
   const handlePlayerState = useCallback((state: string) => {
     if (state === 'paused') setPaused(true);
@@ -259,6 +246,21 @@ export default function PlayPage() {
   const title = map?.title ?? 'プレイ';
   const count = map ? `${finished ? lines.length : activeIndex + 1} / ${lines.length} 行` : '譜面を読み込んでいます…';
   const loading = !map;
+
+  const handleFavorite = async () => {
+    const result = await toggleFavorite(map?.id ?? '');
+    if (result.ok) setFavorite(result.favorite);
+    else if (!loggedIn) window.alert('お気に入りにはログインが必要です。');
+  };
+
+  const handleReport = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!map) return;
+    const form = new FormData(event.currentTarget);
+    const result = await submitReport(map.id, String(form.get('reason') ?? ''), String(form.get('details') ?? ''));
+    setReportMessage(result.ok ? '通報を受け付けました。' : (result.error ?? '通報に失敗しました。'));
+    if (result.ok) event.currentTarget.reset();
+  };
 
   return (
     <>
@@ -299,15 +301,15 @@ export default function PlayPage() {
           <div className="game-keyboard">
             <button onClick={togglePause}><span>{paused ? '再開' : '一時停止'}</span><kbd>Esc</kbd></button>
             <button onClick={() => changeSpeed(0.25)}><span>速度: {playbackRate.toFixed(2)}x</span><kbd>F10</kbd></button>
-            <button onClick={() => setYtTime((value) => Math.max(0, value))}><span>調整: +0.0</span><kbd>←→</kbd></button>
+            <button onClick={() => changeLine(-1)}><span>前ライン</span><kbd>Ctrl+←</kbd></button>
             <button onClick={() => changeVolume(5)}><span>音量: {volume}%</span><kbd>↑↓</kbd></button>
-            <button onClick={() => setPaused((v) => !v)}><span>自動スキップ</span><kbd>Shift+↑↓</kbd></button>
+            <button onClick={togglePause}><span>自動スキップ</span><kbd>Shift+↑↓</kbd></button>
             <button onClick={resetGame}><span>やり直し</span><kbd>F4</kbd></button>
-            <button onClick={() => setPaused((v) => !v)}><span>練習</span><kbd>F7</kbd></button>
+            <button onClick={togglePause}><span>練習</span><kbd>F7</kbd></button>
             <button onClick={() => changeSpeed(-0.25)}><span>速度↓</span><kbd>F9</kbd></button>
-            <button onClick={() => changeLine(1)}><span>前/次ライン</span><kbd>Ctrl+←→</kbd></button>
+            <button onClick={() => changeLine(1)}><span>次ライン</span><kbd>Ctrl+→</kbd></button>
             <button onClick={() => { typedRef.current = ''; setTyped(''); }}><span>戻る</span><kbd>BS</kbd></button>
-            <button onClick={() => { if (nextLine) { typedRef.current = ''; setTyped(''); setActiveIndex(activeIndex + 1); playerControllerRef.current?.seek(nextLine.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>
+            <button onClick={() => { if (nextLine && !paused) { typedRef.current = ''; setTyped(''); setLastKeyOk(null); setActiveIndex(activeIndex + 1); playerControllerRef.current?.seek(nextLine.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>
           </div>
           {paused && <div className="pause-chip">PAUSED · Escで再開</div>}
         </section>
