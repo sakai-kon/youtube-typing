@@ -12,7 +12,6 @@ create table public.profiles (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
-
 create table public.maps (
   id text primary key,
   author_id uuid not null references public.profiles(id) on delete cascade,
@@ -28,14 +27,12 @@ create table public.maps (
   updated_at timestamptz not null default now(),
   constraint maps_lines_is_array check (jsonb_typeof(lines) = 'array')
 );
-
 create table public.favorites (
   user_id uuid not null references public.profiles(id) on delete cascade,
   map_id text not null references public.maps(id) on delete cascade,
   created_at timestamptz not null default now(),
   primary key (user_id, map_id)
 );
-
 create table public.play_history (
   id bigint generated always as identity primary key,
   user_id uuid not null references public.profiles(id) on delete cascade,
@@ -45,7 +42,6 @@ create table public.play_history (
   kpm numeric(10,2) check (kpm is null or kpm >= 0),
   played_at timestamptz not null default now()
 );
-
 create table public.reports (
   id bigint generated always as identity primary key,
   reporter_id uuid not null references public.profiles(id) on delete cascade,
@@ -64,40 +60,30 @@ create index favorites_map_idx on public.favorites(map_id);
 create index play_history_user_played_at_idx on public.play_history(user_id, played_at desc);
 create index play_history_map_played_at_idx on public.play_history(map_id, played_at desc);
 create index reports_status_created_at_idx on public.reports(status, created_at desc);
+create index reports_map_idx on public.reports(map_id);
+create index reports_reporter_idx on public.reports(reporter_id);
 
-create or replace function public.set_updated_at()
-returns trigger language plpgsql set search_path = public
-as $$ begin new.updated_at = now(); return new; end; $$;
+create or replace function public.set_updated_at() returns trigger language plpgsql set search_path = public as $$ begin new.updated_at = now(); return new; end; $$;
 create trigger profiles_set_updated_at before update on public.profiles for each row execute function public.set_updated_at();
 create trigger maps_set_updated_at before update on public.maps for each row execute function public.set_updated_at();
 
-create or replace function private.handle_new_user()
-returns trigger language plpgsql security definer set search_path = ''
-as $$ begin
-  insert into public.profiles (id, display_name)
-  values (new.id, coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), nullif(new.raw_user_meta_data ->> 'full_name', '')))
-  on conflict (id) do nothing;
+create or replace function private.handle_new_user() returns trigger language plpgsql security definer set search_path = '' as $$ begin
+  insert into public.profiles (id, display_name) values (new.id, coalesce(nullif(new.raw_user_meta_data ->> 'display_name', ''), nullif(new.raw_user_meta_data ->> 'full_name', ''))) on conflict (id) do nothing;
   return new;
 end; $$;
 revoke execute on function private.handle_new_user() from public, anon, authenticated;
 create trigger on_auth_user_created after insert on auth.users for each row execute function private.handle_new_user();
 
-create or replace function private.is_admin()
-returns boolean language sql stable security definer set search_path = ''
-as $$ select exists (select 1 from public.profiles where public.profiles.id = (select auth.uid()) and public.profiles.role = 'admin'); $$;
+create or replace function private.is_admin() returns boolean language sql stable security definer set search_path = '' as $$ select exists (select 1 from public.profiles where public.profiles.id = (select auth.uid()) and public.profiles.role = 'admin'); $$;
 revoke execute on function private.is_admin() from public, anon;
 grant usage on schema private to authenticated;
 grant execute on function private.is_admin() to authenticated;
 
-create or replace function private.increment_play_count()
-returns trigger language plpgsql security definer set search_path = ''
-as $$ begin update public.maps set play_count = play_count + 1 where id = new.map_id; return new; end; $$;
+create or replace function private.increment_play_count() returns trigger language plpgsql security definer set search_path = '' as $$ begin update public.maps set play_count = play_count + 1 where id = new.map_id; return new; end; $$;
 revoke execute on function private.increment_play_count() from public, anon, authenticated;
 create trigger play_history_increment_count after insert on public.play_history for each row execute function private.increment_play_count();
 
-create or replace function private.adjust_favorite_count()
-returns trigger language plpgsql security definer set search_path = ''
-as $$ begin
+create or replace function private.adjust_favorite_count() returns trigger language plpgsql security definer set search_path = '' as $$ begin
   if tg_op = 'INSERT' then update public.maps set favorite_count = favorite_count + 1 where id = new.map_id; return new;
   elsif tg_op = 'DELETE' then update public.maps set favorite_count = greatest(favorite_count - 1, 0) where id = old.map_id; return old;
   end if;
@@ -116,12 +102,10 @@ create policy profiles_public_read on public.profiles for select using (true);
 create policy profiles_insert_own on public.profiles for insert to authenticated with check ((select auth.uid()) = id and role = 'user');
 create policy profiles_update_own on public.profiles for update to authenticated using ((select auth.uid()) = id or (select private.is_admin())) with check ((select private.is_admin()) or ((select auth.uid()) = id and role = 'user'));
 create policy profiles_admin_delete on public.profiles for delete to authenticated using ((select private.is_admin()));
-
 create policy maps_read_visible on public.maps for select using (visibility in ('public','unlisted') or (select auth.uid()) = author_id or (select private.is_admin()));
 create policy maps_insert_own on public.maps for insert to authenticated with check ((select auth.uid()) = author_id);
 create policy maps_update_owner_or_admin on public.maps for update to authenticated using ((select auth.uid()) = author_id or (select private.is_admin())) with check ((select auth.uid()) = author_id or (select private.is_admin()));
 create policy maps_delete_owner_or_admin on public.maps for delete to authenticated using ((select auth.uid()) = author_id or (select private.is_admin()));
-
 create policy favorites_own on public.favorites for all to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 create policy history_own_read on public.play_history for select to authenticated using ((select auth.uid()) = user_id or (select private.is_admin()));
 create policy history_insert_own on public.play_history for insert to authenticated with check ((select auth.uid()) = user_id and exists (select 1 from public.maps where public.maps.id = map_id and (public.maps.visibility in ('public','unlisted') or public.maps.author_id = (select auth.uid()))));
