@@ -71,133 +71,106 @@ function expandToken(token: string): string[] {
   return [token.toLowerCase()];
 }
 
-/** Convert kana text into atomic romaji alternatives without losing consumption information. */
-function buildOptions(reading: string): RomajiOption[][] {
+/** Return all valid romaji spellings for the kana beginning at index. */
+function optionsAt(reading: string, index: number): RomajiOption[] {
   const normalized = normalizeReading(reading);
-  const result: RomajiOption[][] = [];
+  const ch = normalized[index] ?? '';
+  const next = normalized[index + 1] ?? '';
+  const pair = ch + next;
 
-  for (let i = 0; i < normalized.length;) {
-    const ch = normalized[i];
-    const next = normalized[i + 1] ?? '';
-    const pair = ch + next;
+  if (!ch) return [];
 
-    if (digraphMap[pair]) {
-      result.push(digraphMap[pair].map((text) => ({ text, advance: 2 })));
-      i += 2;
-      continue;
-    }
-
-    if (ch === 'っ') {
-      if (!next) {
-        result.push(['xtsu','xtu','ltsu','ltu'].map((text) => ({ text, advance: 1 })));
-        i += 1;
-        continue;
-      }
-
-      const nextPair = next + (normalized[i + 2] ?? '');
-      const nextVariants = digraphMap[nextPair] ?? expandToken(next);
-      const doubled = uniq(nextVariants.flatMap((text) => {
-        const consonant = text.match(/^[a-z]/i)?.[0] ?? '';
-        return consonant ? [consonant + text] : [];
-      }));
-      const options: RomajiOption[] = [
-        ...doubled.map((text) => ({ text, advance: digraphMap[nextPair] ? 3 : 2 })),
-        ...['xtsu','xtu','ltsu','ltu'].map((text) => ({ text, advance: 1 })),
-      ];
-      result.push(options);
-      i += digraphMap[nextPair] ? 1 : 1;
-      continue;
-    }
-
-    if (ch === 'ん') {
-      const variants = 'aiueoy'.includes(next) ? ['nn', "n'"] : ['n','nn',"n'"];
-      result.push(variants.map((text) => ({ text, advance: 1 })));
-      i += 1;
-      continue;
-    }
-
-    result.push(expandToken(ch).map((text) => ({ text, advance: 1 })));
-    i += 1;
+  if (digraphMap[pair]) {
+    return digraphMap[pair].map((text) => ({ text, advance: 2 }));
   }
 
-  return result;
+  if (ch === 'っ') {
+    if (!next) return ['xtsu','xtu','ltsu','ltu'].map((text) => ({ text, advance: 1 }));
+
+    const nextPair = next + (normalized[index + 2] ?? '');
+    const nextVariants = digraphMap[nextPair] ?? expandToken(next);
+    const doubled = uniq(nextVariants.flatMap((text) => {
+      const consonant = text.match(/^[a-z]/i)?.[0] ?? '';
+      return consonant ? [consonant + text] : [];
+    }));
+
+    return [
+      ...doubled.map((text) => ({ text, advance: digraphMap[nextPair] ? 3 : 2 })),
+      ...['xtsu','xtu','ltsu','ltu'].map((text) => ({ text, advance: 1 })),
+    ];
+  }
+
+  if (ch === 'ん') {
+    const variants = 'aiueoy'.includes(next) ? ['nn', "n'"] : ['n','nn',"n'"];
+    return variants.map((text) => ({ text, advance: 1 }));
+  }
+
+  return expandToken(ch).map((text) => ({ text, advance: 1 }));
 }
 
-/** Generate common valid keyboard paths. This remains bounded for callers that need concrete candidates. */
+/** Generate concrete valid keyboard paths. Capped only for callers that need the actual list. */
 export function romajiVariants(reading: string, maxVariants = 1024): string[] {
-  const options = buildOptions(reading);
-  let paths: string[] = [''];
-  let tokenIndex = 0;
   const normalized = normalizeReading(reading);
+  const paths: string[] = [];
 
-  while (tokenIndex < options.length) {
-    const nextPaths: string[] = [];
-    for (const base of paths) {
-      for (const option of options[tokenIndex]) {
-        nextPaths.push(base + option.text);
-        if (nextPaths.length >= maxVariants * 2) break;
-      }
-      if (nextPaths.length >= maxVariants * 2) break;
+  const visit = (index: number, built: string): void => {
+    if (paths.length >= maxVariants) return;
+    if (index >= normalized.length) {
+      paths.push(built);
+      return;
     }
-    paths = uniq(nextPaths).slice(0, maxVariants);
-    if (!paths.length) break;
+    for (const option of optionsAt(normalized, index)) {
+      visit(index + option.advance, built + option.text);
+      if (paths.length >= maxVariants) return;
+    }
+  };
 
-    let advance = options[tokenIndex][0]?.advance ?? 1;
-    // buildOptions has one entry per logical token, so one result entry advances exactly once here.
-    // The actual kana cursor is already accounted for while constructing options.
-    void advance;
-    tokenIndex += 1;
-  }
-
-  void normalized;
-  return paths.length ? paths : [''];
+  visit(0, '');
+  return paths.length ? uniq(paths).slice(0, maxVariants) : [''];
 }
 
-function inputStatus(options: RomajiOption[][], typed: string): { prefix: boolean; done: boolean } {
+/**
+ * Judge typed input directly against the romaji state graph.
+ * This deliberately does not depend on romajiVariants(), so candidate-count
+ * limits can never make a valid input path invalid.
+ */
+function inputStatus(reading: string, typed: string): { prefix: boolean; done: boolean } {
+  const normalized = normalizeReading(reading);
+  const input = typed.toLowerCase();
   const memo = new Map<string, { prefix: boolean; done: boolean }>();
 
-  const visit = (tokenIndex: number, inputIndex: number): { prefix: boolean; done: boolean } => {
-    const key = `${tokenIndex}:${inputIndex}`;
+  const visit = (kanaIndex: number, inputIndex: number): { prefix: boolean; done: boolean } => {
+    const key = `${kanaIndex}:${inputIndex}`;
     const cached = memo.get(key);
     if (cached) return cached;
 
-    if (inputIndex === typed.length) {
-      const done = tokenIndex === options.length;
-      const result = { prefix: true, done };
+    if (inputIndex === input.length) {
+      const result = { prefix: true, done: kanaIndex >= normalized.length };
       memo.set(key, result);
       return result;
     }
-    if (tokenIndex >= options.length) {
+    if (kanaIndex >= normalized.length) {
       const result = { prefix: false, done: false };
       memo.set(key, result);
       return result;
     }
 
-    for (const option of options[tokenIndex]) {
-      let cursor = inputIndex;
-      let matches = true;
-      for (let j = 0; j < option.text.length && cursor < typed.length; j += 1, cursor += 1) {
-        if (typed[cursor] !== option.text[j].toLowerCase()) {
-          matches = false;
-          break;
-        }
-      }
-      if (!matches) continue;
-
-      // The typed input ends inside this option, so it is a valid prefix even if
-      // that option itself has not been completed yet.
-      if (cursor === typed.length && typed.length - inputIndex < option.text.length) {
-        const result = { prefix: true, done: false };
-        memo.set(key, result);
-        return result;
-      }
-
-      // The option was fully matched; continue with the next logical kana token.
-      if (cursor === typed.length) {
-        const child = visit(tokenIndex + 1, cursor);
-        if (child.prefix || child.done) {
-          memo.set(key, child);
-          return child;
+    for (const option of optionsAt(normalized, kanaIndex)) {
+      const remaining = input.length - inputIndex;
+      if (remaining <= option.text.length) {
+        const partial = input.slice(inputIndex);
+        if (option.text.startsWith(partial)) {
+          const completeOption = remaining === option.text.length;
+          if (!completeOption) {
+            const result = { prefix: true, done: false };
+            memo.set(key, result);
+            return result;
+          }
+          const child = visit(kanaIndex + option.advance, input.length);
+          if (child.prefix || child.done) {
+            memo.set(key, child);
+            return child;
+          }
         }
       }
     }
@@ -211,8 +184,7 @@ function inputStatus(options: RomajiOption[][], typed: string): { prefix: boolea
 }
 
 export function isAcceptedInput(reading: string, typed: string): boolean {
-  const input = typed.toLowerCase();
-  return inputStatus(buildOptions(reading), input).done;
+  return inputStatus(reading, typed).done;
 }
 
 export function nextInputState(reading: string, typed: string): {
@@ -220,12 +192,8 @@ export function nextInputState(reading: string, typed: string): {
   done: boolean;
   candidates: string[];
 } {
+  const status = inputStatus(reading, typed);
   const input = typed.toLowerCase();
-  const options = buildOptions(reading);
-  const status = inputStatus(options, input);
-
-  // Candidates are informational only; the actual judge above does NOT depend on
-  // candidate enumeration, so large maps can never lose a valid path because of a cap.
   const candidates = romajiVariants(reading, 64).filter((candidate) => candidate.startsWith(input));
   return {
     status: status.prefix ? 'correct' : 'wrong',
