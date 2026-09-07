@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
 import { loadMaps } from '@/lib/storage';
 import { getPublicMaps } from '@/lib/cloud';
 import type { TypingMap } from '@/lib/types';
@@ -28,7 +29,7 @@ export default function SearchPage() {
   }, [maps, query, sort]);
 
   return <>
-    <header className="site-header"><div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span><span>YouTube <b>Typing</b></span></Link><nav className="nav"><Link className="active" href="/search">探す</Link><Link href="/create">譜面を作る</Link><Link className="nav-accent" href="/login">ログイン</Link></nav></div></header>
+    <SiteHeader />
     <main className="container section search-page">
       <div className="page-head"><div><p className="eyebrow">DISCOVER MAPS</p><h1 className="page-title">譜面を探す</h1><p className="muted">公開・共有譜面と、このブラウザのローカル譜面を検索できます。</p></div><Link className="btn primary" href="/create">＋ 譜面を作る</Link></div>
       <div className="search-panel card"><div className="search-shell large"><span>⌕</span><input autoFocus className="search-input-plain" value={query} onChange={e=>setQuery(e.target.value)} placeholder="曲名、説明、タグで検索…" aria-label="検索"/></div><select value={sort} onChange={e=>setSort(e.target.value as 'new'|'popular')}><option value="new">新着順</option><option value="popular">人気順</option></select></div>
