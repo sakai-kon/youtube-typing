@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
 import { getMyMaps } from '@/lib/cloud';
 import { getSupabase } from '@/lib/supabase/client';
 import { sitePath } from '@/lib/site';
@@ -19,9 +20,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    setProfileId(new URLSearchParams(window.location.search).get('id') ?? 'me');
-  }, []);
+  useEffect(() => { setProfileId(new URLSearchParams(window.location.search).get('id') ?? 'me'); }, []);
 
   useEffect(() => {
     if (!profileId) return;
@@ -34,8 +33,7 @@ export default function ProfilePage() {
       if (!targetId) { setMessage('ログインが必要です。'); setLoading(false); return; }
       if (alive) { setProfileId(targetId); setMine(user?.id === targetId); }
       const { data, error } = await supabase.from('profiles').select('username, display_name, avatar_url').eq('id', targetId).maybeSingle();
-      if (error) setMessage(error.message);
-      else if (data && alive) setProfile(data);
+      if (error) setMessage(error.message); else if (data && alive) setProfile(data);
       if (user?.id === targetId) {
         const ownMaps = await getMyMaps();
         if (alive) setMaps(ownMaps);
@@ -62,7 +60,7 @@ export default function ProfilePage() {
   const signOut = async () => { if (supabase) { await supabase.auth.signOut(); window.location.assign(sitePath('/')); } };
 
   return <>
-    <header className="site-header"><div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span> YouTube <span>Typing</span></Link><nav className="nav"><Link href="/create">譜面を作る</Link>{mine && <button className="btn" onClick={signOut}>ログアウト</button>}</nav></div></header>
+    <SiteHeader />
     <main className="container section profile-page">
       <div className="profile-hero">
         <div className="profile-avatar">{(profile.display_name || profile.username || 'Y').slice(0,1).toUpperCase()}</div>
