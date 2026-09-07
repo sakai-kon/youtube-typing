@@ -1,5 +1,6 @@
 import type { MapLine, TypingMap } from './types';
 import { getSupabase } from './supabase/client';
+import type { Database } from './supabase/database.types';
 
 type MapRow = { id: string; author_id: string; title: string; description: string; youtube_video_id: string; tags: string[]; visibility: string; lines: unknown; created_at: string; updated_at: string };
 
@@ -116,7 +117,6 @@ export async function submitCopyrightRequest(input: {
   mapId?: string | null;
   reason: string;
   details: string;
-  contact?: string | null;
 }): Promise<{ ok: boolean; error?: string }> {
   const supabase = getSupabase();
   if (!supabase) return { ok: false, error: '現在は申立てを送信できません。Supabaseが設定されていません。' };
@@ -126,7 +126,6 @@ export async function submitCopyrightRequest(input: {
     map_id: input.mapId?.trim() || null,
     reason: input.reason.trim(),
     details: input.details.trim(),
-    contact: input.contact?.trim() || null,
     requester_id: user?.id ?? null,
   };
   const { error } = await supabase.from('copyright_requests').insert(payload);
@@ -148,5 +147,3 @@ export async function updateCopyrightRequest(id: number, status: 'pending' | 're
   const { error } = await supabase.from('copyright_requests').update({ status, resolved_at: status === 'resolved' || status === 'rejected' ? new Date().toISOString() : null }).eq('id', id);
   return error ? { ok: false, error: error.message } : { ok: true };
 }
-
-import type { Database } from './supabase/database.types';
