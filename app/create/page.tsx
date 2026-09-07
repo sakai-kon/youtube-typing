@@ -46,18 +46,15 @@ export default function CreatePage() {
       const id = new URLSearchParams(window.location.search).get('edit');
       if (!id) return;
       if (alive) setLoadingEdit(true);
-
       const local = findMap(id);
       if (local && alive) {
         setMap(local);
         setCanEdit(local.authorId === 'local');
       }
-
       const cloud = await getMap(id);
       if (cloud && alive) setMap(cloud);
       if (alive) setLoadingEdit(false);
     };
-
     const loadAuth = async () => {
       if (!supabase) {
         await load();
@@ -70,7 +67,6 @@ export default function CreatePage() {
       }
       await load();
     };
-
     loadAuth();
     return () => { alive = false; };
   }, [supabase]);
@@ -81,11 +77,8 @@ export default function CreatePage() {
       setCanEdit(true);
       return;
     }
-    if (map.authorId === 'local') {
-      setCanEdit(true);
-    } else {
-      setCanEdit(!!userId && map.authorId === userId);
-    }
+    if (map.authorId === 'local') setCanEdit(true);
+    else setCanEdit(!!userId && map.authorId === userId);
   }, [map.authorId, userId]);
 
   const ready = map.youtubeVideoId.length > 0;
@@ -178,7 +171,7 @@ export default function CreatePage() {
         </div>
         <div className="editor-grid" style={{marginTop:18}}>
           <section className="card"><div className="card-topline"><div><p className="eyebrow">VIDEO</p><h2 style={{margin:0}}>タイミング登録</h2></div><span className="timecode">{time.toFixed(2)}s</span></div>{ready ? <YouTubePlayer videoId={map.youtubeVideoId} onTime={setTime} /> : <div className="empty">YouTube URLを入力すると、ここに動画が表示されます。</div>}<div className="notice" style={{marginTop:12}}><b>現在時刻 {time.toFixed(2)}秒</b><span style={{display:'block',fontSize:12,marginTop:4,color:'var(--muted)'}}>動画を止めずに文章と読みを入力して、その瞬間で登録できます。</span></div><div className="form" style={{marginTop:12}}><div className="field"><label>表示する文章</label><input value={text} onChange={(e)=>setText(e.target.value)} placeholder="今日も一日頑張ろう" /></div><div className="field"><label>読み（ひらがな推奨）</label><input value={reading} onChange={(e)=>setReading(e.target.value)} placeholder="きょうもいちにちがんばろう" /></div><button className="btn primary" type="button" onClick={addLine} disabled={!ready || !text.trim() || !reading.trim()}>＋ 現在時刻を登録</button></div></section>
-          <section className="card"><div className="toolbar"><div><p className="eyebrow">TIMELINE</p><h2 style={{margin:0}}>登録済み</h2></div><span className="spacer"/><span className="muted">{sorted.length} 行</span></div><div className="line-list" style={{marginTop:10}}>{sorted.map((line, idx)=><div className="line-item" key={line.id}><div className="line-num">{String(idx+1).padStart(2,'0')}</div><div className="line-main"><strong>{line.text}</strong><small>{line.reading}</small><div className="meta"><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number(Math.max(0,line.startTime-0.1).toFixed(2))})}>−0.1</button><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number((line.startTime+0.1).toFixed(2))}>＋0.1</button><input aria-label="開始時間" type="number" min="0" step="0.01" value={line.startTime} onChange={(e)=>updateLine(line.id,{startTime:Math.max(0,Number(e.target.value))})} style={{width:92,background:'#0b0f15',border:'1px solid var(--line)',borderRadius:7,color:'var(--text)',padding:'5px 7px'}} /></div></div><div className="line-actions"><span className="line-time">{line.startTime.toFixed(2)}s</span><button className="icon-btn" onClick={()=>removeLine(line.id)}>削除</button></div></div>)}{!sorted.length && <div className="empty">まだ行がありません。動画を再生しながら右側へ追加していきます。</div>}</div></section>
+          <section className="card"><div className="toolbar"><div><p className="eyebrow">TIMELINE</p><h2 style={{margin:0}}>登録済み</h2></div><span className="spacer"/><span className="muted">{sorted.length} 行</span></div><div className="line-list" style={{marginTop:10}}>{sorted.map((line, idx)=><div className="line-item" key={line.id}><div className="line-num">{String(idx+1).padStart(2,'0')}</div><div className="line-main"><strong>{line.text}</strong><small>{line.reading}</small><div className="meta"><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number(Math.max(0,line.startTime-0.1).toFixed(2))})}>−0.1</button><button className="icon-btn" onClick={()=>updateLine(line.id,{startTime:Number((line.startTime+0.1).toFixed(2))})}>＋0.1</button><input aria-label="開始時間" type="number" min="0" step="0.01" value={line.startTime} onChange={(e)=>updateLine(line.id,{startTime:Math.max(0,Number(e.target.value))})} style={{width:92,background:'#0b0f15',border:'1px solid var(--line)',borderRadius:7,color:'var(--text)',padding:'5px 7px'}} /></div></div><div className="line-actions"><span className="line-time">{line.startTime.toFixed(2)}s</span><button className="icon-btn" onClick={()=>removeLine(line.id)}>削除</button></div></div>)}{!sorted.length && <div className="empty">まだ行がありません。動画を再生しながら右側へ追加していきます。</div>}</div></section>
         </div>
       </>}
     </main>
