@@ -46,10 +46,15 @@ function loadYouTubeApi(): Promise<YTGlobal> {
 export function YouTubePlayer({ videoId, onTime, onState, controllerRef }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YTPlayer | null>(null);
+  const controllerStateRef = useRef<PlayerState>('unstarted');
   const countdownTimerRef = useRef<number | null>(null);
   const [time, setTime] = useState(0);
   const [state, setState] = useState<PlayerState>('unstarted');
   const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    controllerStateRef.current = state;
+  }, [state]);
 
   useEffect(() => {
     let alive = true;
@@ -62,6 +67,7 @@ export function YouTubePlayer({ videoId, onTime, onState, controllerRef }: Props
         events: {
           onStateChange: (event) => {
             const next = stateNames[event.data] ?? 'unstarted';
+            controllerStateRef.current = next;
             setState(next);
             onState?.(next);
           },
@@ -72,7 +78,7 @@ export function YouTubePlayer({ videoId, onTime, onState, controllerRef }: Props
           play: () => playerRef.current?.playVideo(),
           pause: () => playerRef.current?.pauseVideo(),
           togglePause: () => {
-            if (state === 'playing') {
+            if (controllerStateRef.current === 'playing') {
               playerRef.current?.pauseVideo();
               return true;
             }
@@ -97,7 +103,7 @@ export function YouTubePlayer({ videoId, onTime, onState, controllerRef }: Props
       playerRef.current?.destroy();
       playerRef.current = null;
     };
-  }, [videoId, onState, controllerRef, state]);
+  }, [videoId, onState, controllerRef]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
