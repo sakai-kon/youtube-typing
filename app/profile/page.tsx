@@ -62,7 +62,7 @@ export default function ProfilePage() {
   const signOut = async () => { if (supabase) { await supabase.auth.signOut(); window.location.assign(sitePath('/')); } };
 
   return <>
-    <header className="site-header"><Link className="brand" href="/"><span className="brand-mark">YT</span> YouTube <span>Typing</span></Link><nav className="nav"><Link href="/create">譜面を作る</Link>{mine && <button className="btn" onClick={signOut}>ログアウト</button>}</nav></div>
+    <header className="site-header"><div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span> YouTube <span>Typing</span></Link><nav className="nav"><Link href="/create">譜面を作る</Link>{mine && <button className="btn" onClick={signOut}>ログアウト</button>}</nav></div></header>
     <main className="container section profile-page">
       <div className="profile-hero">
         <div className="profile-avatar">{(profile.display_name || profile.username || 'Y').slice(0,1).toUpperCase()}</div>
