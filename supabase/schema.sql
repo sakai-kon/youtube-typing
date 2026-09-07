@@ -58,10 +58,11 @@ create table public.copyright_requests (
   map_url text not null check (char_length(btrim(map_url)) between 10 and 2000),
   reason text not null default 'copyright' check (char_length(btrim(reason)) between 1 and 100),
   details text not null default '' check (char_length(details) <= 5000),
+  contact text null,
   requester_id uuid null references auth.users(id) on delete set null,
   status text not null default 'pending' check (status in ('pending','reviewing','resolved','rejected')),
   created_at timestamptz not null default now(),
-  resolved_at timestamptz
+  resolved_at timestamptz null
 );
 
 create index maps_visibility_updated_at_idx on public.maps(visibility, updated_at desc);
@@ -131,16 +132,15 @@ create policy copyright_requests_insert on public.copyright_requests for insert 
 create policy copyright_requests_read_admin on public.copyright_requests for select to authenticated using ((select private.is_admin()));
 create policy copyright_requests_update_admin on public.copyright_requests for update to authenticated using ((select private.is_admin())) with check ((select private.is_admin()));
 
-revoke all on public.copyright_requests from anon, authenticated;
-grant insert on public.copyright_requests to anon, authenticated;
-grant select, update on public.copyright_requests to authenticated;
-
 grant select on public.profiles, public.maps, public.favorites, public.play_history, public.reports to anon, authenticated;
 grant insert, update, delete on public.profiles to authenticated;
 grant insert, update, delete on public.maps to authenticated;
 grant insert, delete on public.favorites to authenticated;
 grant insert, select on public.play_history to authenticated;
 grant insert, update, delete, select on public.reports to authenticated;
+revoke all on public.copyright_requests from anon, authenticated;
+grant insert on public.copyright_requests to anon, authenticated;
+grant select, update on public.copyright_requests to authenticated;
 revoke insert, update, delete on public.maps from anon;
 revoke insert, update, delete on public.favorites from anon;
 revoke insert, update, delete on public.reports from anon;
