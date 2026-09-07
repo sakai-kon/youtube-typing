@@ -3,6 +3,19 @@ import { getSupabase } from './supabase/client';
 
 type MapRow = { id: string; author_id: string; title: string; description: string; youtube_video_id: string; tags: string[]; visibility: string; lines: unknown; created_at: string; updated_at: string };
 
+type CopyrightRequestRow = {
+  id: number;
+  map_id: string | null;
+  map_url: string;
+  reason: string;
+  details: string;
+  contact: string | null;
+  requester_id: string | null;
+  status: string;
+  created_at: string;
+  resolved_at: string | null;
+};
+
 function normalizeLines(value: unknown): MapLine[] {
   if (!Array.isArray(value)) return [];
   return value.filter((line): line is Record<string, unknown> => !!line && typeof line === 'object').map((line) => ({
@@ -97,3 +110,43 @@ export async function submitReport(mapId: string, reason: string, details: strin
   const { error } = await supabase.from('reports').insert({ reporter_id: user.id, map_id: mapId, reason: reason.trim(), details: details.trim() });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
+
+export async function submitCopyrightRequest(input: {
+  mapUrl: string;
+  mapId?: string | null;
+  reason: string;
+  details: string;
+  contact?: string | null;
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, error: '現在は申立てを送信できません。Supabaseが設定されていません。' };
+  const { data: { user } } = await supabase.auth.getUser();
+  const payload: Database['public']['Tables']['copyright_requests']['Insert'] = {
+    map_url: input.mapUrl.trim(),
+    map_id: input.mapId?.trim() || null,
+    reason: input.reason.trim(),
+    details: input.details.trim(),
+    contact: input.contact?.trim() || null,
+    requester_id: user?.id ?? null,
+  };
+  const { error } = await supabase.from('copyright_requests').insert(payload);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+export type CopyrightRequest = CopyrightRequestRow;
+
+export async function getCopyrightRequests(): Promise<CopyrightRequest[]> {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('copyright_requests').select('*').order('created_at', { ascending: false }).limit(200);
+  return error || !data ? [] : data as CopyrightRequest[];
+}
+
+export async function updateCopyrightRequest(id: number, status: 'pending' | 'reviewing' | 'resolved' | 'rejected'): Promise<{ ok: boolean; error?: string }> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: false, error: 'Supabaseが設定されていません。' };
+  const { error } = await supabase.from('copyright_requests').update({ status, resolved_at: status === 'resolved' || status === 'rejected' ? new Date().toISOString() : null }).eq('id', id);
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
+import type { Database } from './supabase/database.types';
