@@ -14,6 +14,10 @@ const hiraMap: Record<string, string[]> = {
   'だ':['da'],'ぢ':['di','ji'],'づ':['du','zu'],'で':['de'],'ど':['do'],
   'ば':['ba'],'び':['bi'],'ぶ':['bu'],'べ':['be'],'ぼ':['bo'],
   'ぱ':['pa'],'ぴ':['pi'],'ぷ':['pu'],'ぺ':['pe'],'ぽ':['po'],
+  'ゔ':['vu'],'ゐ':['wi'],'ゑ':['we'],
+  'ぁ':['xa','la'],'ぃ':['xi','li'],'ぅ':['xu','lu'],'ぇ':['xe','le'],'ぉ':['xo','lo'],
+  'ゃ':['xya','lya'],'ゅ':['xyu','lyu'],'ょ':['xyo','lyo'],
+  'ゎ':['xwa','lwa'],'っ':['xtsu','xtu','ltsu','ltu'],
 };
 
 const digraphMap: Record<string, string[]> = {
@@ -28,14 +32,22 @@ const digraphMap: Record<string, string[]> = {
   'じゃ':['ja','jya','zya'],'じゅ':['ju','jyu','zyu'],'じょ':['jo','jyo','zyo'],
   'びゃ':['bya'],'びゅ':['byu'],'びょ':['byo'],
   'ぴゃ':['pya'],'ぴゅ':['pyu'],'ぴょ':['pyo'],
-  'でぃ':['di'],'どぅ':['du'],'てぃ':['thi'],'とぅ':['twu'],
+  'でぃ':['di','dhi'],'どぅ':['du','dwu'],'てぃ':['thi','ti'],'とぅ':['twu','twu'],
   'うぃ':['wi'],'うぇ':['we'],'うぉ':['who','wo'],
-  'ふぁ':['fa','fwa'],'ふぃ':['fi'],'ふぇ':['fe'],'ふぉ':['fo'],
+  'いぇ':['ye'],'ゔぁ':['va'],'ゔぃ':['vi'],'ゔぇ':['ve'],'ゔぉ':['vo'],
+  'ふぁ':['fa','fwa'],'ふぃ':['fi','fwi'],'ふぇ':['fe','fwe'],'ふぉ':['fo','fwo'],
+  'ふゅ':['fyu'],
+  'つぁ':['tsa'],'つぃ':['tsi'],'つぇ':['tse'],'つぉ':['tso'],
+  'すぃ':['si'],'ずぃ':['zi'],'てゅ':['thu','tyu'],'でゅ':['dhu','dyu'],
+  'くぁ':['qa','kwa'],'くぃ':['qi','kwi'],'くぇ':['qe','kwe'],'くぉ':['qo','kwo'],
+  'ぐぁ':['gwa'],'ぐぃ':['gwi'],'ぐぇ':['gwe'],'ぐぉ':['gwo'],
+  'しぇ':['she'],'じぇ':['je','jye','zye'],
 };
 
 const symbolMap: Record<string, string[]> = {
   'ー':['-'],'。':['.'],'、':[','],'！':['!'],'？':['?'],'（':['('],'）':[')'],
-  '「':['['],'」':[']'],'・':['/'],'　':[' '], ' ':[' '],
+  '「':['['],'」':[']'],'『':['['],'』':[']'],'・':['/'],'：':[':'],'；':[';'],
+  '　':[' '], ' ':[' '], '〜':['~'],'～':['~'],
 };
 
 function toHiragana(input: string): string {
@@ -57,42 +69,67 @@ function expandToken(token: string): string[] {
   return [token.toLowerCase()];
 }
 
-/** Generate common valid keyboard paths. Kept deterministic and capped. */
-export function romajiVariants(reading: string, maxVariants = 128): string[] {
-  const normalized = normalizeReading(reading);
-  const paths: string[] = [''];
+function appendPaths(paths: string[], variants: string[], maxVariants: number): string[] {
+  const nextPaths: string[] = [];
+  for (const base of paths) {
+    for (const variant of variants) {
+      nextPaths.push(base + variant);
+      if (nextPaths.length >= maxVariants * 2) break;
+    }
+    if (nextPaths.length >= maxVariants * 2) break;
+  }
+  return uniq(nextPaths).slice(0, maxVariants);
+}
 
-  for (let i = 0; i < normalized.length; i += 1) {
+/** Generate common valid keyboard paths. Supports alternate IME-style spellings. */
+export function romajiVariants(reading: string, maxVariants = 256): string[] {
+  const normalized = normalizeReading(reading);
+  let paths: string[] = [''];
+
+  for (let i = 0; i < normalized.length;) {
     const ch = normalized[i];
     const next = normalized[i + 1] ?? '';
     const pair = ch + next;
-    let tokenLen = 1;
-    let variants = expandToken(ch);
 
+    // Longest token first: digraphs such as しゃ, ふぁ, でゅ, etc.
     if (digraphMap[pair]) {
-      variants = digraphMap[pair];
-      tokenLen = 2;
-    } else if (ch === 'っ') {
-      const nextPair = next + (normalized[i + 2] ?? '');
-      const nextVariants = expandToken(digraphMap[nextPair] ? nextPair : next);
-      const doubled = uniq(nextVariants.flatMap((v) => (v[0] ? [v[0] + v] : [])));
-      variants = [...doubled, 'xtsu', 'ltu'];
-    } else if (ch === 'ん') {
-      // N can be ambiguous before vowels/y, so include the safe double-n route.
-      variants = ['n','nn'];
-      if ('aiueoy'.includes(next)) variants = ['nn'];
+      paths = appendPaths(paths, digraphMap[pair], maxVariants);
+      i += 2;
+      continue;
     }
 
-    const nextPaths: string[] = [];
-    for (const base of paths) {
-      for (const variant of variants) {
-        nextPaths.push(base + variant);
-        if (nextPaths.length >= maxVariants) break;
+    // Small tsu (っ): consume it together with the following kana so that
+    // the following kana is NOT appended a second time. This fixes cases like
+    // ぼくだってさ -> bokudattesa instead of bokudattetesa.
+    if (ch === 'っ') {
+      if (!next) {
+        paths = appendPaths(paths, ['xtsu','xtu','ltsu','ltu'], maxVariants);
+        i += 1;
+        continue;
       }
-      if (nextPaths.length >= maxVariants) break;
+
+      const nextPair = next + (normalized[i + 2] ?? '');
+      const nextVariants = digraphMap[nextPair] ?? expandToken(next);
+      const doubled = uniq(nextVariants.flatMap((v) => {
+        const consonant = v.match(/^[a-z]/i)?.[0] ?? '';
+        return consonant ? [consonant + v] : [];
+      }));
+
+      paths = appendPaths(paths, [...doubled, 'xtsu','xtu','ltsu','ltu'], maxVariants);
+      i += digraphMap[nextPair] ? 3 : 2;
+      continue;
     }
-    paths.splice(0, paths.length, ...uniq(nextPaths).slice(0, maxVariants));
-    i += tokenLen - 1;
+
+    // ん before a vowel or y needs a disambiguating spelling in IME-style input.
+    if (ch === 'ん') {
+      const variants = 'aiueoy'.includes(next) ? ['nn'] : ['n','nn'];
+      paths = appendPaths(paths, variants, maxVariants);
+      i += 1;
+      continue;
+    }
+
+    paths = appendPaths(paths, expandToken(ch), maxVariants);
+    i += 1;
   }
 
   return paths.length ? paths : [''];
