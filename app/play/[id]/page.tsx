@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { YouTubePlayer } from '@/components/youtube-player';
 import { findMap } from '@/lib/storage';
@@ -26,6 +26,7 @@ export default function PlayPage() {
   const [loggedIn, setLoggedIn] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
   const [reportMessage, setReportMessage] = useState('');
+  const recordedRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -71,14 +72,15 @@ export default function PlayPage() {
   }, [current, typed, finishLine, finished, startedAt]);
 
   useEffect(() => {
-    if (!finished || !map || !loggedIn) return;
+    if (!finished || !map || !loggedIn || recordedRef.current) return;
+    recordedRef.current = true;
     const elapsed = startedAt ? Math.max((Date.now() - startedAt) / 1000 / 60, 1/60) : 1/60;
     const kpm = Math.round(acceptedChars / elapsed);
     const accuracy = Math.round((acceptedChars / Math.max(acceptedChars + misses, 1)) * 100);
-    recordPlay(map.id, accuracy, misses, kpm);
+    void recordPlay(map.id, accuracy, misses, kpm);
   }, [finished, map, loggedIn, startedAt, acceptedChars, misses]);
 
-  const reset = () => { setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0); setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); };
+  const reset = () => { recordedRef.current = false; setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0); setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); };
   const handleFavorite = async () => { const result = await toggleFavorite(map?.id ?? ''); if (result.ok) setFavorite(result.favorite); else if (!loggedIn) window.alert('お気に入りにはログインが必要です。'); };
   const handleReport = async (event: React.FormEvent<HTMLFormElement>) => { event.preventDefault(); if (!map) return; const form = new FormData(event.currentTarget); const result = await submitReport(map.id, String(form.get('reason') ?? ''), String(form.get('details') ?? '')); setReportMessage(result.ok ? '通報を受け付けました。' : (result.error ?? '通報に失敗しました。')); if (result.ok) event.currentTarget.reset(); };
 
