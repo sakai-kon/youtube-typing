@@ -71,12 +71,14 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!lines.length || finished || paused) return;
+    // Never steal the active line away while the player is in the middle of typing it.
+    // Once the input is empty (initial state or after a completed line), catch up to video time.
+    if (typedRef.current) return;
+
     let index = activeIndex;
     while (index + 1 < lines.length && ytTime >= lines[index + 1].startTime) index += 1;
     if (index !== activeIndex) {
       setActiveIndex(index);
-      typedRef.current = '';
-      setTyped('');
       setLastKeyOk(null);
     }
   }, [ytTime, lines, activeIndex, finished, paused]);
