@@ -7,6 +7,8 @@ import { getSupabase } from '@/lib/supabase/client';
 type Report = { id: number; map_id: string; reason: string; details: string; status: string; created_at: string };
 type Profile = { id: string; username: string | null; display_name: string | null; role: string; created_at: string };
 
+type AdminProfileRow = Pick<Profile, 'role'>;
+
 export default function AdminPage() {
   const supabase = getSupabase();
   const [allowed, setAllowed] = useState(false);
@@ -18,8 +20,15 @@ export default function AdminPage() {
     if (!supabase) { setMessage('Supabaseが設定されていません。'); return; }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setMessage('管理画面にはログインが必要です。'); return; }
-    const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle();
+
+    const { data: meData } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    const me = meData as AdminProfileRow | null;
     if (me?.role !== 'admin') { setMessage('管理者権限がありません。'); return; }
+
     setAllowed(true);
     const [{ data: reportData, error: reportError }, { data: profileData, error: profileError }] = await Promise.all([
       supabase.from('reports').select('id, map_id, reason, details, status, created_at').order('created_at', { ascending: false }).limit(100),
