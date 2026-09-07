@@ -27,6 +27,7 @@ export default function PlayPage() {
   const [reportMessage, setReportMessage] = useState('');
   const [paused, setPaused] = useState(false);
   const recordedRef = useRef(false);
+  const typedRef = useRef('');
 
   useEffect(() => { setMapId(new URLSearchParams(window.location.search).get('id') ?? ''); }, []);
 
@@ -62,12 +63,14 @@ export default function PlayPage() {
     while (index + 1 < lines.length && ytTime >= lines[index + 1].startTime) index += 1;
     if (index !== activeIndex) {
       setActiveIndex(index);
+      typedRef.current = '';
       setTyped('');
       setLastKeyOk(null);
     }
   }, [ytTime, lines, activeIndex, finished, paused]);
 
   const finishLine = useCallback(() => {
+    typedRef.current = '';
     if (activeIndex >= lines.length - 1) setFinished(true);
     else {
       setActiveIndex((i) => i + 1);
@@ -82,15 +85,20 @@ export default function PlayPage() {
       if (event.key.length !== 1 && event.key !== 'Backspace') return;
       if (event.ctrlKey || event.metaKey || event.altKey) return;
       event.preventDefault();
+
       if (event.key === 'Backspace') {
-        setTyped((value) => value.slice(0, -1));
+        typedRef.current = typedRef.current.slice(0, -1);
+        setTyped(typedRef.current);
         return;
       }
+
       if (startedAt === null) setStartedAt(Date.now());
-      const proposed = typed + event.key.toLowerCase();
+      const proposed = typedRef.current + event.key.toLowerCase();
       const result = nextInputState(current.reading, proposed);
       setLastKeyOk(result.status === 'correct');
+
       if (result.status === 'correct') {
+        typedRef.current = proposed;
         setTyped(proposed);
         setAcceptedChars((value) => value + 1);
         if (result.done) finishLine();
@@ -100,7 +108,7 @@ export default function PlayPage() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [current, typed, finishLine, finished, paused, startedAt]);
+  }, [current, finishLine, finished, paused, startedAt]);
 
   useEffect(() => {
     if (!finished || !map || !loggedIn || recordedRef.current) return;
@@ -121,6 +129,7 @@ export default function PlayPage() {
 
   const reset = () => {
     recordedRef.current = false;
+    typedRef.current = '';
     setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
     setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
   };
@@ -146,7 +155,7 @@ export default function PlayPage() {
   const expectedRomaji = current ? (romajiVariants(current.reading, 1)[0] ?? '') : '';
   const remaining = nextLine ? Math.max(0, nextLine.startTime - ytTime) : 0;
   const title = map?.title ?? 'プレイ';
-  const count = map ? `${finished ? lines.length : activeIndex + 1} / ${lines.length} 行` : '譜面を読み込み中…';
+  const count = map ? `${finished ? lines.length : activeIndex + 1} / ${lines.length} 行` : '譜面を読み込んでいます…';
   const loading = !map;
 
   return (
@@ -195,7 +204,7 @@ export default function PlayPage() {
             <button><span>練習</span><kbd>F7</kbd></button>
             <button><span>速度↓</span><kbd>F9</kbd></button>
             <button><span>前/次ライン</span><kbd>Ctrl+←→</kbd></button>
-            <button onClick={() => setTyped('')}><span>戻る</span><kbd>BS</kbd></button>
+            <button onClick={() => { typedRef.current = ''; setTyped(''); }}><span>戻る</span><kbd>BS</kbd></button>
             <button><span>Space でスキップ</span><kbd>Space</kbd></button>
           </div>
           {paused && <div className="pause-chip">PAUSED · Escで再開</div>}
