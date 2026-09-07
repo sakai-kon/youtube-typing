@@ -46,7 +46,7 @@ export function mapToRow(map: TypingMap, authorId: string) {
 export async function getPublicMaps(query = ''): Promise<TypingMap[]> {
   const supabase = getSupabase();
   if (!supabase) return [];
-  const { data, error } = await supabase.from('maps').select('*').eq('visibility', 'public').order('updated_at', { ascending: false }).limit(100);
+  const { data, error } = await supabase.from('maps').select('*').eq('visibility', 'public').order('updated_at', { ascending: false }).limit(1000);
   if (error || !data) return [];
   const q = query.trim().toLowerCase();
   return (data as MapRow[]).map(rowToMap).filter((map) => !q || `${map.title} ${map.description} ${map.tags.join(' ')}`.toLowerCase().includes(q));
