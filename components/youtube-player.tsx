@@ -28,14 +28,89 @@ function loadYouTubeApi(): Promise<YTGlobal> {
 }
 
 export function YouTubePlayer({ videoId, onTime, onState, compact = false }: Props) {
-  const hostRef = useRef<HTMLDivElement>(null); const playerRef = useRef<YTPlayer | null>(null);
-  const [time, setTime] = useState(0); const [state, setState] = useState<PlayerState>('unstarted');
+  const hostRef = useRef<HTMLDivElement>(null);
+  const playerRef = useRef<YTPlayer | null>(null);
+  const countdownTimerRef = useRef<number | null>(null);
+  const [time, setTime] = useState(0);
+  const [state, setState] = useState<PlayerState>('unstarted');
+  const [countdown, setCountdown] = useState<number | null>(null);
+
   useEffect(() => {
     let alive = true;
-    loadYouTubeApi().then((YT) => { if (!alive || !hostRef.current) return; playerRef.current?.destroy(); playerRef.current = new YT.Player(hostRef.current, { videoId, playerVars: { playsinline: 1, rel: 0, modestbranding: 1 }, events: { onStateChange: (event) => { const next = stateNames[event.data] ?? 'unstarted'; setState(next); onState?.(next); } } }); }).catch(() => { if (alive) setState('unstarted'); });
-    return () => { alive = false; playerRef.current?.destroy(); playerRef.current = null; };
+    loadYouTubeApi().then((YT) => {
+      if (!alive || !hostRef.current) return;
+      playerRef.current?.destroy();
+      playerRef.current = new YT.Player(hostRef.current, {
+        videoId,
+        playerVars: { playsinline: 1, rel: 0, modestbranding: 1 },
+        events: {
+          onStateChange: (event) => {
+            const next = stateNames[event.data] ?? 'unstarted';
+            setState(next);
+            onState?.(next);
+          },
+        },
+      });
+    }).catch(() => {
+      if (alive) setState('unstarted');
+    });
+
+    return () => {
+      alive = false;
+      if (countdownTimerRef.current !== null) window.clearInterval(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+      setCountdown(null);
+      playerRef.current?.destroy();
+      playerRef.current = null;
+    };
   }, [videoId, onState]);
-  useEffect(() => { const timer = window.setInterval(() => { const current = playerRef.current?.getCurrentTime?.(); if (typeof current === 'number' && Number.isFinite(current)) { setTime(current); onTime?.(current); } }, 100); return () => window.clearInterval(timer); }, [onTime]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const current = playerRef.current?.getCurrentTime?.();
+      if (typeof current === 'number' && Number.isFinite(current)) {
+        setTime(current);
+        onTime?.(current);
+      }
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [onTime]);
+
+  const startPlayback = () => {
+    if (!playerRef.current || countdown !== null) return;
+    setCountdown(3);
+    let value = 3;
+    countdownTimerRef.current = window.setInterval(() => {
+      value -= 1;
+      if (value <= 0) {
+        if (countdownTimerRef.current !== null) window.clearInterval(countdownTimerRef.current);
+        countdownTimerRef.current = null;
+        setCountdown(null);
+        playerRef.current?.playVideo();
+        return;
+      }
+      setCountdown(value);
+    }, 1000);
+  };
+
   const jump = (delta: number) => playerRef.current?.seekTo(Math.max(0, time + delta), true);
-  return <div className="yt-wrap"><div className={compact ? 'yt-frame compact' : 'yt-frame'} ref={hostRef} /><div className="yt-controls"><span className="timecode">{time.toFixed(2)}s</span><button onClick={() => playerRef.current?.playVideo()} type="button">▶ 再生</button><button onClick={() => playerRef.current?.pauseVideo()} type="button">⏸ 一時停止</button><button onClick={() => jump(-0.1)} type="button">−0.1s</button><button onClick={() => jump(0.1)} type="button">＋0.1s</button><span className="player-state">{state}</span></div></div>;
+
+  return (
+    <div className="yt-wrap">
+      <div className={compact ? 'yt-frame compact' : 'yt-frame'} ref={hostRef} />
+      {countdown !== null && <div className="yt-countdown" aria-live="assertive">{countdown}</div>}
+      <div className="yt-controls">
+        <span className="timecode">{time.toFixed(2)}s</span>
+        <button onClick={startPlayback} type="button" disabled={countdown !== null}>▶ 再生</button>
+        <button onClick={() => playerRef.current?.pauseVideo()} type="button">⏸ 一時停止</button>
+        <button onClick={() => jump(-0.1)} type="button">−0.1s</button>
+        <button onClick={() => jump(0.1)} type="button">＋0.1s</button>
+        <span className="player-state">{state}</span>
+      </div>
+      <style jsx>{`
+        .yt-wrap{position:relative}
+        .yt-countdown{position:absolute;inset:0;display:grid;place-items:center;z-index:5;background:rgba(0,0,0,.46);color:#fff;font-size:clamp(72px,12vw,150px);font-weight:900;line-height:1;text-shadow:0 8px 35px #000;pointer-events:none}
+      `}</style>
+    </div>
+  );
 }
