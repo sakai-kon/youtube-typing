@@ -187,14 +187,50 @@ export function isAcceptedInput(reading: string, typed: string): boolean {
   return inputStatus(reading, typed).done;
 }
 
+// The play page currently builds `proposed` from React state. During very fast
+// typing, a second key can arrive before React commits the first key, causing
+// the page to pass only that second character. Keep a tiny per-reading buffer
+// here so the validator can reconcile that render-timing race without changing
+// the accepted romaji grammar.
+const rapidInputBuffer = new Map<string, string>();
+
+function reconcileRapidInput(reading: string, proposed: string): { readingKey: string; input: string } {
+  const readingKey = normalizeReading(reading);
+  const previous = rapidInputBuffer.get(readingKey) ?? '';
+  const input = proposed.toLowerCase();
+
+  if (input === previous || input.startsWith(previous) || previous.startsWith(input)) {
+    return { readingKey, input };
+  }
+
+  // React missed the latest state commit: the UI passed only the newest key.
+  if (input.length === 1 && previous.length > 0) {
+    return { readingKey, input: previous + input };
+  }
+
+  return { readingKey, input };
+}
+
 export function nextInputState(reading: string, typed: string): {
   status: 'correct' | 'wrong';
   done: boolean;
   candidates: string[];
 } {
-  const status = inputStatus(reading, typed);
-  const input = typed.toLowerCase();
-  const candidates = romajiVariants(reading, 64).filter((candidate) => candidate.startsWith(input));
+  const reconciled = reconcileRapidInput(reading, typed);
+  const status = inputStatus(reconciled.readingKey, reconciled.input);
+
+  if (status.prefix) {
+    rapidInputBuffer.set(reconciled.readingKey, reconciled.input);
+  } else {
+    rapidInputBuffer.set(reconciled.readingKey, rapidInputBuffer.get(reconciled.readingKey) ?? '');
+  }
+
+  if (status.done) {
+    rapidInputBuffer.delete(reconciled.readingKey);
+  }
+
+  const input = reconciled.input;
+  const candidates = romajiVariants(reconciled.readingKey, 64).filter((candidate) => candidate.startsWith(input));
   return {
     status: status.prefix ? 'correct' : 'wrong',
     done: status.done,
