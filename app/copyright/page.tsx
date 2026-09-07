@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { SiteHeader } from '@/components/site-header';
 import { submitCopyrightRequest } from '@/lib/cloud';
 import { getSupabase } from '@/lib/supabase/client';
 
@@ -27,36 +28,18 @@ export default function CopyrightPage() {
     event.preventDefault();
     const trimmedUrl = mapUrl.trim();
     const trimmedDetails = details.trim();
-    if (!trimmedUrl || !trimmedDetails) {
-      setMessage('譜面URLと申立て内容を入力してください。');
-      return;
-    }
-    try {
-      new URL(trimmedUrl);
-    } catch {
-      setMessage('有効な譜面URLを入力してください。');
-      return;
-    }
+    if (!trimmedUrl || !trimmedDetails) { setMessage('譜面URLと申立て内容を入力してください。'); return; }
+    try { new URL(trimmedUrl); } catch { setMessage('有効な譜面URLを入力してください。'); return; }
     setLoading(true);
     setMessage('');
-    const result = await submitCopyrightRequest({
-      mapUrl: trimmedUrl,
-      mapId: extractMapId(trimmedUrl),
-      reason,
-      details: trimmedDetails,
-    });
+    const result = await submitCopyrightRequest({ mapUrl: trimmedUrl, mapId: extractMapId(trimmedUrl), reason, details: trimmedDetails });
     setLoading(false);
-    if (result.ok) {
-      setMapUrl('');
-      setDetails('');
-      setMessage('申立てを受け付けました。管理者が内容を確認します。');
-    } else {
-      setMessage(result.error ?? '送信に失敗しました。');
-    }
+    if (result.ok) { setMapUrl(''); setDetails(''); setMessage('申立てを受け付けました。管理者が内容を確認します。'); }
+    else setMessage(result.error ?? '送信に失敗しました。');
   };
 
   return <>
-    <header className="site-header"><div className="container header-inner"><Link className="brand" href="/"><span className="brand-mark">YT</span> YouTube <span>Typing</span></Link><nav className="nav"><Link href="/search">検索</Link><Link href="/create">譜面を作る</Link><Link href="/">トップ</Link></nav></div></header>
+    <SiteHeader />
     <main className="container section">
       <div className="page-head"><div><p className="eyebrow">COPYRIGHT / TAKEDOWN</p><h1 className="page-title">著作権に関する申立て</h1><p className="muted">譜面に関する権利上の問題を管理者へ送信できます。</p></div></div>
       <div className="card" style={{maxWidth:760}}>
