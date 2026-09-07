@@ -22,7 +22,9 @@ export default function SearchPage() {
 
   const results = useMemo(() => {
     const filtered = maps.filter((m) => `${m.title} ${m.description} ${m.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase().trim()));
-    return [...filtered].sort((a,b) => sort === 'new' ? b.updatedAt.localeCompare(a.updatedAt) : 0);
+    return [...filtered].sort((a,b) => sort === 'new'
+      ? b.updatedAt.localeCompare(a.updatedAt)
+      : (b.playCount ?? 0) - (a.playCount ?? 0) || b.updatedAt.localeCompare(a.updatedAt));
   }, [maps, query, sort]);
 
   return <>
