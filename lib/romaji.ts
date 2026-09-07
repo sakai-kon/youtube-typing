@@ -18,6 +18,7 @@ const hiraMap: Record<string, string[]> = {
   'ぁ':['xa','la'],'ぃ':['xi','li'],'ぅ':['xu','lu'],'ぇ':['xe','le'],'ぉ':['xo','lo'],
   'ゃ':['xya','lya'],'ゅ':['xyu','lyu'],'ょ':['xyo','lyo'],
   'ゎ':['xwa','lwa'],'っ':['xtsu','xtu','ltsu','ltu'],
+  'ゕ':['xka','lka'],'ゖ':['xke','lke'],
 };
 
 const digraphMap: Record<string, string[]> = {
@@ -32,23 +33,24 @@ const digraphMap: Record<string, string[]> = {
   'じゃ':['ja','jya','zya'],'じゅ':['ju','jyu','zyu'],'じょ':['jo','jyo','zyo'],
   'びゃ':['bya'],'びゅ':['byu'],'びょ':['byo'],
   'ぴゃ':['pya'],'ぴゅ':['pyu'],'ぴょ':['pyo'],
-  'でぃ':['di','dhi'],'どぅ':['du','dwu'],'てぃ':['thi','ti'],'とぅ':['twu','twu'],
-  'うぃ':['wi'],'うぇ':['we'],'うぉ':['who','wo'],
-  'いぇ':['ye'],'ゔぁ':['va'],'ゔぃ':['vi'],'ゔぇ':['ve'],'ゔぉ':['vo'],
-  'ふぁ':['fa','fwa'],'ふぃ':['fi','fwi'],'ふぇ':['fe','fwe'],'ふぉ':['fo','fwo'],
-  'ふゅ':['fyu'],
+  'でぃ':['di','dhi'],'どぅ':['du','dwu'],'てぃ':['thi','ti'],'とぅ':['twu'],
+  'うぃ':['wi'],'うぇ':['we'],'うぉ':['who','wo'],'いぇ':['ye'],
+  'ゔぁ':['va'],'ゔぃ':['vi'],'ゔぇ':['ve'],'ゔぉ':['vo'],'ゔゅ':['vyu'],
+  'ふぁ':['fa','fwa'],'ふぃ':['fi','fwi'],'ふぇ':['fe','fwe'],'ふぉ':['fo','fwo'],'ふゅ':['fyu'],
   'つぁ':['tsa'],'つぃ':['tsi'],'つぇ':['tse'],'つぉ':['tso'],
-  'すぃ':['si'],'ずぃ':['zi'],'てゅ':['thu','tyu'],'でゅ':['dhu','dyu'],
-  'くぁ':['qa','kwa'],'くぃ':['qi','kwi'],'くぇ':['qe','kwe'],'くぉ':['qo','kwo'],
-  'ぐぁ':['gwa'],'ぐぃ':['gwi'],'ぐぇ':['gwe'],'ぐぉ':['gwo'],
+  'すぃ':['si','swi'],'ずぃ':['zi','zwi'],'てゅ':['thu','tyu'],'でゅ':['dhu','dyu'],
+  'くぁ':['qa','kwa'],'くぃ':['qi','kwi'],'くぇ':['qe','kwe'],'くぉ':['qo','kwo'],'くゅ':['qyu','kyu'],
+  'ぐぁ':['gwa'],'ぐぃ':['gwi'],'ぐぇ':['gwe'],'ぐぉ':['gwo'],'ぐゅ':['gwyu'],
   'しぇ':['she'],'じぇ':['je','jye','zye'],
 };
 
 const symbolMap: Record<string, string[]> = {
   'ー':['-'],'。':['.'],'、':[','],'！':['!'],'？':['?'],'（':['('],'）':[')'],
   '「':['['],'」':[']'],'『':['['],'』':[']'],'・':['/'],'：':[':'],'；':[';'],
-  '　':[' '], ' ':[' '], '〜':['~'],'～':['~'],
+  '　':[' '],' ':[' '],'〜':['~'],'～':['~'],
 };
+
+type RomajiOption = { text: string; advance: number };
 
 function toHiragana(input: string): string {
   return input.replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
@@ -69,75 +71,148 @@ function expandToken(token: string): string[] {
   return [token.toLowerCase()];
 }
 
-function appendPaths(paths: string[], variants: string[], maxVariants: number): string[] {
-  const nextPaths: string[] = [];
-  for (const base of paths) {
-    for (const variant of variants) {
-      nextPaths.push(base + variant);
-      if (nextPaths.length >= maxVariants * 2) break;
-    }
-    if (nextPaths.length >= maxVariants * 2) break;
-  }
-  return uniq(nextPaths).slice(0, maxVariants);
-}
-
-/** Generate common valid keyboard paths. Supports alternate IME-style spellings. */
-export function romajiVariants(reading: string, maxVariants = 256): string[] {
+/** Convert kana text into atomic romaji alternatives without losing consumption information. */
+function buildOptions(reading: string): RomajiOption[][] {
   const normalized = normalizeReading(reading);
-  let paths: string[] = [''];
+  const result: RomajiOption[][] = [];
 
   for (let i = 0; i < normalized.length;) {
     const ch = normalized[i];
     const next = normalized[i + 1] ?? '';
     const pair = ch + next;
 
-    // Longest token first: digraphs such as しゃ, ふぁ, でゅ, etc.
     if (digraphMap[pair]) {
-      paths = appendPaths(paths, digraphMap[pair], maxVariants);
+      result.push(digraphMap[pair].map((text) => ({ text, advance: 2 })));
       i += 2;
       continue;
     }
 
-    // Small tsu (っ): consume it together with the following kana so that
-    // the following kana is NOT appended a second time. This fixes cases like
-    // ぼくだってさ -> bokudattesa instead of bokudattetesa.
     if (ch === 'っ') {
       if (!next) {
-        paths = appendPaths(paths, ['xtsu','xtu','ltsu','ltu'], maxVariants);
+        result.push(['xtsu','xtu','ltsu','ltu'].map((text) => ({ text, advance: 1 })));
         i += 1;
         continue;
       }
 
       const nextPair = next + (normalized[i + 2] ?? '');
       const nextVariants = digraphMap[nextPair] ?? expandToken(next);
-      const doubled = uniq(nextVariants.flatMap((v) => {
-        const consonant = v.match(/^[a-z]/i)?.[0] ?? '';
-        return consonant ? [consonant + v] : [];
+      const doubled = uniq(nextVariants.flatMap((text) => {
+        const consonant = text.match(/^[a-z]/i)?.[0] ?? '';
+        return consonant ? [consonant + text] : [];
       }));
-
-      paths = appendPaths(paths, [...doubled, 'xtsu','xtu','ltsu','ltu'], maxVariants);
-      i += digraphMap[nextPair] ? 3 : 2;
+      const options: RomajiOption[] = [
+        ...doubled.map((text) => ({ text, advance: digraphMap[nextPair] ? 3 : 2 })),
+        ...['xtsu','xtu','ltsu','ltu'].map((text) => ({ text, advance: 1 })),
+      ];
+      result.push(options);
+      i += digraphMap[nextPair] ? 1 : 1;
       continue;
     }
 
-    // ん before a vowel or y needs a disambiguating spelling in IME-style input.
     if (ch === 'ん') {
-      const variants = 'aiueoy'.includes(next) ? ['nn'] : ['n','nn'];
-      paths = appendPaths(paths, variants, maxVariants);
+      const variants = 'aiueoy'.includes(next) ? ['nn', "n'"] : ['n','nn',"n'"];
+      result.push(variants.map((text) => ({ text, advance: 1 })));
       i += 1;
       continue;
     }
 
-    paths = appendPaths(paths, expandToken(ch), maxVariants);
+    result.push(expandToken(ch).map((text) => ({ text, advance: 1 })));
     i += 1;
   }
 
+  return result;
+}
+
+/** Generate common valid keyboard paths. This remains bounded for callers that need concrete candidates. */
+export function romajiVariants(reading: string, maxVariants = 1024): string[] {
+  const options = buildOptions(reading);
+  let paths: string[] = [''];
+  let tokenIndex = 0;
+  const normalized = normalizeReading(reading);
+
+  while (tokenIndex < options.length) {
+    const nextPaths: string[] = [];
+    for (const base of paths) {
+      for (const option of options[tokenIndex]) {
+        nextPaths.push(base + option.text);
+        if (nextPaths.length >= maxVariants * 2) break;
+      }
+      if (nextPaths.length >= maxVariants * 2) break;
+    }
+    paths = uniq(nextPaths).slice(0, maxVariants);
+    if (!paths.length) break;
+
+    let advance = options[tokenIndex][0]?.advance ?? 1;
+    // buildOptions has one entry per logical token, so one result entry advances exactly once here.
+    // The actual kana cursor is already accounted for while constructing options.
+    void advance;
+    tokenIndex += 1;
+  }
+
+  void normalized;
   return paths.length ? paths : [''];
 }
 
+function inputStatus(options: RomajiOption[][], typed: string): { prefix: boolean; done: boolean } {
+  const memo = new Map<string, { prefix: boolean; done: boolean }>();
+
+  const visit = (tokenIndex: number, inputIndex: number): { prefix: boolean; done: boolean } => {
+    const key = `${tokenIndex}:${inputIndex}`;
+    const cached = memo.get(key);
+    if (cached) return cached;
+
+    if (inputIndex === typed.length) {
+      const done = tokenIndex === options.length;
+      const result = { prefix: true, done };
+      memo.set(key, result);
+      return result;
+    }
+    if (tokenIndex >= options.length) {
+      const result = { prefix: false, done: false };
+      memo.set(key, result);
+      return result;
+    }
+
+    for (const option of options[tokenIndex]) {
+      let cursor = inputIndex;
+      let matches = true;
+      for (let j = 0; j < option.text.length && cursor < typed.length; j += 1, cursor += 1) {
+        if (typed[cursor] !== option.text[j].toLowerCase()) {
+          matches = false;
+          break;
+        }
+      }
+      if (!matches) continue;
+
+      // The typed input ends inside this option, so it is a valid prefix even if
+      // that option itself has not been completed yet.
+      if (cursor === typed.length && typed.length - inputIndex < option.text.length) {
+        const result = { prefix: true, done: false };
+        memo.set(key, result);
+        return result;
+      }
+
+      // The option was fully matched; continue with the next logical kana token.
+      if (cursor === typed.length) {
+        const child = visit(tokenIndex + 1, cursor);
+        if (child.prefix || child.done) {
+          memo.set(key, child);
+          return child;
+        }
+      }
+    }
+
+    const result = { prefix: false, done: false };
+    memo.set(key, result);
+    return result;
+  };
+
+  return visit(0, 0);
+}
+
 export function isAcceptedInput(reading: string, typed: string): boolean {
-  const normalizedTyped = typed.toLowerCase();
-  return romajiVariants(reading).some((candidate) => candidate === normalizedTyped);
+  const input = typed.toLowerCase();
+  return inputStatus(buildOptions(reading), input).done;
 }
 
 export function nextInputState(reading: string, typed: string): {
@@ -146,11 +221,15 @@ export function nextInputState(reading: string, typed: string): {
   candidates: string[];
 } {
   const input = typed.toLowerCase();
-  const candidates = romajiVariants(reading);
-  const prefixes = candidates.filter((candidate) => candidate.startsWith(input));
+  const options = buildOptions(reading);
+  const status = inputStatus(options, input);
+
+  // Candidates are informational only; the actual judge above does NOT depend on
+  // candidate enumeration, so large maps can never lose a valid path because of a cap.
+  const candidates = romajiVariants(reading, 64).filter((candidate) => candidate.startsWith(input));
   return {
-    status: prefixes.length ? 'correct' : 'wrong',
-    done: candidates.includes(input),
-    candidates: prefixes,
+    status: status.prefix ? 'correct' : 'wrong',
+    done: status.done,
+    candidates,
   };
 }
