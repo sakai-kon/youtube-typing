@@ -6,10 +6,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  pages: write
+  id-token: write
 
 concurrency:
-  group: static-site
+  group: pages
   cancel-in-progress: true
 
 env:
@@ -17,13 +19,11 @@ env:
   NEXT_PUBLIC_SUPABASE_URL: https://kfoaphvuwhksdpclfzna.supabase.co
 
 jobs:
-  build-and-publish:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -36,15 +36,18 @@ jobs:
       - name: Build static site
         run: npm run build
 
-      - name: Publish static files to main for branch-based Pages
-        run: |
-          cp -R out/. .
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html 404.html _next admin copyright create login play profile search
-          if git diff --cached --quiet; then
-            echo "No generated site changes to commit."
-            exit 0
-          fi
-          git commit -m "chore: publish static site [skip ci]"
-          git push origin HEAD:main
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
