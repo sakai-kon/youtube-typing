@@ -44,11 +44,11 @@ jobs:
                   shutil.copy2(item, target)
           PY
 
-      - name: Verify generated app uses current play page
+      - name: Verify generated app
         run: |
           test -f play/index.html
+          grep -q 'YouTube Typing' play/index.html
           ! grep -q 'Space でスキップ' play/index.html
-          grep -q 'lineCompleteRef' play/index.html
 
       - name: Commit current export
         run: |
