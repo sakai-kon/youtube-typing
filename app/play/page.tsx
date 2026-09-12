@@ -46,6 +46,7 @@ export default function PlayPage() {
   const nextLineRef = useRef<TypingMap['lines'][number] | undefined>(undefined);
   const pausedRef = useRef(false);
   const finishedRef = useRef(false);
+  const lineCompleteRef = useRef(false);
   const startedAtRef = useRef<number | null>(null);
 
   useEffect(() => { setMapId(new URLSearchParams(window.location.search).get('id') ?? ''); }, []);
@@ -85,8 +86,25 @@ export default function PlayPage() {
 
   useEffect(() => {
     if (!lines.length || finished || paused) return;
-    // Never steal the active line away while the player is in the middle of typing it.
-    // Once the input is empty (initial state or after a completed line), catch up to video time.
+
+    // Once the current line is completed, keep it visible until the video reaches
+    // the next line's scheduled start time. The typing result never advances early.
+    if (lineCompleteRef.current) {
+      const next = nextLineRef.current;
+      if (!next) {
+        setFinished(true);
+        lineCompleteRef.current = false;
+        return;
+      }
+      if (ytTime < next.startTime) return;
+
+      lineCompleteRef.current = false;
+      setActiveIndex((index) => Math.min(lines.length - 1, index + 1));
+      setLastKeyOk(null);
+      return;
+    }
+
+    // Before typing starts, keep the active line synchronized with video time.
     if (typedRef.current) return;
 
     let index = activeIndex;
@@ -99,13 +117,17 @@ export default function PlayPage() {
 
   const finishLine = useCallback(() => {
     typedRef.current = '';
+    setTyped('');
+    setLastKeyOk(null);
+
     const index = activeIndexRef.current;
-    if (index >= linesRef.current.length - 1) setFinished(true);
-    else {
-      setActiveIndex((i) => i + 1);
-      setTyped('');
-      setLastKeyOk(null);
+    if (index >= linesRef.current.length - 1) {
+      setFinished(true);
+      return;
     }
+
+    // Mark the line as typed, but let the video clock decide when the next line appears.
+    lineCompleteRef.current = true;
   }, []);
 
   const togglePause = useCallback(() => {
@@ -147,6 +169,7 @@ export default function PlayPage() {
   const resetGame = useCallback(() => {
     recordedRef.current = false;
     typedRef.current = '';
+    lineCompleteRef.current = false;
     startedAtRef.current = null;
     setYtTime(0); setTyped(''); setMisses(0); setAcceptedChars(0);
     setStartedAt(null); setFinished(false); setActiveIndex(0); setLastKeyOk(null); setPaused(false);
@@ -205,20 +228,11 @@ export default function PlayPage() {
         changeLine(1);
         return;
       }
-      if (event.key === ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key === ' ') {
         event.preventDefault();
-        const next = nextLineRef.current;
-        if (!pausedRef.current && next) {
-          typedRef.current = '';
-          setTyped('');
-          setLastKeyOk(null);
-          const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1);
-          setActiveIndex(nextIndex);
-          playerControllerRef.current?.seek(next.startTime);
-        }
         return;
       }
-      if (pausedRef.current || finishedRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (pausedRef.current || finishedRef.current || lineCompleteRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key !== 'Backspace' && event.key.length !== 1) return;
       event.preventDefault();
 
@@ -336,7 +350,7 @@ export default function PlayPage() {
             <button onClick={() => changeSpeed(-0.25)}><span>速度↓</span><kbd>F9</kbd></button>
             <button onClick={() => changeLine(1)}><span>次ライン</span><kbd>Ctrl+→</kbd></button>
             <button onClick={() => { typedRef.current = ''; setTyped(''); }}><span>戻る</span><kbd>BS</kbd></button>
-            <button onClick={() => { const next = nextLineRef.current; if (next && !pausedRef.current) { typedRef.current = ''; setTyped(''); setLastKeyOk(null); const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1); setActiveIndex(nextIndex); playerControllerRef.current?.seek(next.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>
+            <button disabled><span>Space</span><kbd>Space</kbd></button>
           </div>
           {paused && <div className="pause-chip">PAUSED · Escで再開</div>}
         </section>
