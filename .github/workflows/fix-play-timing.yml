@@ -77,11 +77,12 @@ jobs:
               'lineCompleteRef.current = true;',
               "if (event.key === ' ') {",
               'ytTime < next.startTime',
+              'lineCompleteRef.current || !line',
           ]
           forbidden = [
-              'playerControllerRef.current?.seek(next.startTime)',
               'const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1);',
               'setActiveIndex((i) => i + 1);',
+              'if (event.key === \' \' && !event.ctrlKey && !event.metaKey && !event.altKey) {',
           ]
 
           for needle in required:
