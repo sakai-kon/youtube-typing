@@ -68,9 +68,29 @@ jobs:
 
       - name: Verify source patch
         run: |
-          grep -q "lineCompleteRef" app/play/page.tsx
-          ! grep -q "playerControllerRef.current?.seek(next.startTime)" app/play/page.tsx
-          ! grep -q "const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1)" app/play/page.tsx
+          python3 - <<'PY'
+          from pathlib import Path
+
+          text = Path('app/play/page.tsx').read_text(encoding='utf-8')
+          required = [
+              'const lineCompleteRef = useRef(false);',
+              'lineCompleteRef.current = true;',
+              "if (event.key === ' ') {",
+              'ytTime < next.startTime',
+          ]
+          forbidden = [
+              'playerControllerRef.current?.seek(next.startTime)',
+              'const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1);',
+              'setActiveIndex((i) => i + 1);',
+          ]
+
+          for needle in required:
+              if needle not in text:
+                  raise SystemExit(f'missing required patch: {needle}')
+          for needle in forbidden:
+              if needle in text:
+                  raise SystemExit(f'forbidden old logic remains: {needle}')
+          PY
 
       - name: Remove trigger and one-time workflow, then commit
         run: |
