@@ -53,6 +53,10 @@ jobs:
               raise SystemExit('space skip block not found')
           text = text.replace(old_space, "      if (event.key === ' ') {\n        event.preventDefault();\n        return;\n      }\n")
 
+          old_space_button = """            <button onClick={() => { const next = nextLineRef.current; if (next && !pausedRef.current) { typedRef.current = ''; setTyped(''); setLastKeyOk(null); const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1); setActiveIndex(nextIndex); playerControllerRef.current?.seek(next.startTime); } }}><span>Space でスキップ</span><kbd>Space</kbd></button>"""
+          if old_space_button in text:
+              text = text.replace(old_space_button, "            <button disabled><span>Space</span><kbd>Space</kbd></button>")
+
           text = text.replace(
               "      if (pausedRef.current || finishedRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;",
               "      if (pausedRef.current || finishedRef.current || lineCompleteRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;",
@@ -78,11 +82,12 @@ jobs:
               "if (event.key === ' ') {",
               'ytTime < next.startTime',
               'lineCompleteRef.current || !line',
+              'Space</span><kbd>Space</kbd>',
           ]
+
           forbidden = [
-              'const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1);',
-              'setActiveIndex((i) => i + 1);',
-              'if (event.key === \' \' && !event.ctrlKey && !event.metaKey && !event.altKey) {',
+              "if (event.key === ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {",
+              '<span>Space でスキップ</span>',
           ]
 
           for needle in required:
@@ -91,6 +96,10 @@ jobs:
           for needle in forbidden:
               if needle in text:
                   raise SystemExit(f'forbidden old logic remains: {needle}')
+
+          # The only direct setActiveIndex increment may be inside the timing gate.
+          if 'setActiveIndex((i) => i + 1);' in text:
+              raise SystemExit('old finishLine increment remains')
           PY
 
       - name: Remove trigger and one-time workflow, then commit
