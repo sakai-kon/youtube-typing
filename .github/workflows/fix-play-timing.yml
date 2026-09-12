@@ -1,0 +1,83 @@
+name: One-time play timing fix
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[play-timing-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch play timing logic
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/play/page.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          text = text.replace(
+              "  const finishedRef = useRef(false);\n  const startedAtRef = useRef<number | null>(null);",
+              "  const finishedRef = useRef(false);\n  const lineCompleteRef = useRef(false);\n  const startedAtRef = useRef<number | null>(null);",
+          )
+
+          old_effect = """  useEffect(() => {\n    if (!lines.length || finished || paused) return;\n    // Never steal the active line away while the player is in the middle of typing it.\n    // Once the input is empty (initial state or after a completed line), catch up to video time.\n    if (typedRef.current) return;\n\n    let index = activeIndex;\n    while (index + 1 < lines.length && ytTime >= lines[index + 1].startTime) index += 1;\n    if (index !== activeIndex) {\n      setActiveIndex(index);\n      setLastKeyOk(null);\n    }\n  }, [ytTime, lines, activeIndex, finished, paused]);"""
+
+          new_effect = """  useEffect(() => {\n    if (!lines.length || finished || paused) return;\n\n    // After a line is completed, keep showing that line until the video reaches\n    // the next line's scheduled startTime. Never advance early just because\n    // the player finished accepting the input.\n    if (lineCompleteRef.current) {\n      if (!nextLineRef.current || ytTime < nextLineRef.current.startTime) return;\n      lineCompleteRef.current = false;\n      setActiveIndex((index) => Math.min(lines.length - 1, index + 1));\n      setLastKeyOk(null);\n      return;\n    }\n\n    // Before typing starts, keep the active line synchronized with video time.\n    if (typedRef.current) return;\n\n    let index = activeIndex;\n    while (index + 1 < lines.length && ytTime >= lines[index + 1].startTime) index += 1;\n    if (index !== activeIndex) {\n      setActiveIndex(index);\n      setLastKeyOk(null);\n    }\n  }, [ytTime, lines, activeIndex, finished, paused]);"""
+
+          if old_effect not in text:
+              raise SystemExit('timing effect block not found')
+          text = text.replace(old_effect, new_effect)
+
+          old_finish = """  const finishLine = useCallback(() => {\n    typedRef.current = '';\n    const index = activeIndexRef.current;\n    if (index >= linesRef.current.length - 1) setFinished(true);\n    else {\n      setActiveIndex((i) => i + 1);\n      setTyped('');\n      setLastKeyOk(null);\n    }\n  }, []);"""
+
+          new_finish = """  const finishLine = useCallback(() => {\n    typedRef.current = '';\n    setTyped('');\n    setLastKeyOk(null);\n\n    const index = activeIndexRef.current;\n    const lines = linesRef.current;\n    const currentLine = lines[index];\n\n    if (index >= lines.length - 1) {\n      // The final line can finish immediately when no explicit endTime exists.\n      // When endTime is present, respect it as the final timing boundary too.\n      if (!currentLine?.endTime || ytTime >= currentLine.endTime) {\n        setFinished(true);\n      } else {\n        lineCompleteRef.current = true;\n      }\n      return;\n    }\n\n    // Do not advance here. The timing effect above advances exactly at next.startTime.\n    lineCompleteRef.current = true;\n  }, [ytTime]);"""
+
+          if old_finish not in text:
+              raise SystemExit('finishLine block not found')
+          text = text.replace(old_finish, new_finish)
+
+          old_space = """      if (event.key === ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {\n        event.preventDefault();\n        const next = nextLineRef.current;\n        if (!pausedRef.current && next) {\n          typedRef.current = '';\n          setTyped('');\n          setLastKeyOk(null);\n          const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1);\n          setActiveIndex(nextIndex);\n          playerControllerRef.current?.seek(next.startTime);\n        }\n        return;\n      }\n"""
+
+          if old_space not in text:
+              raise SystemExit('space skip block not found')
+          text = text.replace(old_space, "      if (event.key === ' ') return;\n")
+
+          text = text.replace(
+              "      if (pausedRef.current || finishedRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;",
+              "      if (pausedRef.current || finishedRef.current || lineCompleteRef.current || !line || event.ctrlKey || event.metaKey || event.altKey) return;",
+          )
+
+          text = text.replace(
+              "    recordedRef.current = false;\n    typedRef.current = '';\n    startedAtRef.current = null;",
+              "    recordedRef.current = false;\n    typedRef.current = '';\n    lineCompleteRef.current = false;\n    startedAtRef.current = null;",
+          )
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Verify source patch
+        run: |
+          grep -q "lineCompleteRef" app/play/page.tsx
+          ! grep -q "playerControllerRef.current?.seek(next.startTime)" app/play/page.tsx
+          ! grep -q "const nextIndex = Math.min(linesRef.current.length - 1, activeIndexRef.current + 1)" app/play/page.tsx
+
+      - name: Commit source fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/play/page.tsx .github/workflows/fix-play-timing.yml
+          git rm .github/workflows/fix-play-timing.yml
+          git diff --cached --check
+          git commit -m "fix: sync play lines to video timing [play-timing-fix]"
+          git push
