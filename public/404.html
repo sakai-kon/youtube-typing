@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Redirecting…</title>
+  <script>
+    (function () {
+      var path = window.location.pathname;
+      var base = '/youtube-typing';
+      var routes = ['/admin', '/copyright', '/create', '/login', '/play', '/profile', '/search'];
+
+      // GitHub Pages serves Next.js static-export routes from /route/index.html.
+      // When a user refreshes /youtube-typing/play, Pages can return this 404
+      // before normalizing the directory URL. Redirect to the slash form while
+      // preserving the query string and hash.
+      for (var i = 0; i < routes.length; i += 1) {
+        if (path === base + routes[i]) {
+          window.location.replace(path + '/' + window.location.search + window.location.hash);
+          return;
+        }
+      }
+    })();
+  </script>
+</head>
+<body></body>
+</html>
