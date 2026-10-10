@@ -36,12 +36,12 @@ export type Database = {
       reports: {
         Row: { id: number; reporter_id: string; map_id: string; reason: string; details: string; status: string; created_at: string; resolved_at: string | null };
         Insert: { id?: never; reporter_id: string; map_id: string; reason: string; details?: string; status?: string; created_at?: string; resolved_at?: string | null };
-        Update: { id?: never; reporter_id?: string; map_id?: string; reason?: string; details?: string; status?: string; created_at?: string; resolved_at?: string | null };
-        Relationships: [{ foreignKeyName: 'reports_map_id_fkey'; columns: ['map_id']; isOneToOne: false; referencedRelation: 'maps'; referencedColumns: ['id'] }, { foreignKeyName: 'reports_reporter_id_fkey'; columns: ['reporter_id']; referencedColumns: ['id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id'] }];
+        Update: { id?: never; reporter_id?: never; map_id?: string; reason?: string; details?: string; status?: string; created_at?: string; resolved_at?: string | null };
+        Relationships: [{ foreignKeyName: 'reports_map_id_fkey'; columns: ['map_id']; isOneToOne: false; referencedRelation: 'maps'; referencedColumns: ['id'] }, { foreignKeyName: 'reports_reporter_id_fkey'; columns: ['reporter_id']; isOneToOne: false; referencedRelation: 'profiles'; referencedColumns: ['id'] }];
       };
       copyright_requests: {
         Row: { id: number; map_id: string | null; map_url: string; reason: string; details: string; contact: string | null; requester_id: string | null; status: string; created_at: string; resolved_at: string | null };
-        Insert: { id?: never; map_id?: string | null; map_url: string; reason?: string; details: string; contact?: string | null; requester_id?: string | null; status?: string; created_at?: string; updated_at?: string };
+        Insert: { id?: never; map_id?: string | null; map_url: string; reason?: string; details?: string; contact?: string | null; requester_id?: string | null; status?: string; created_at?: string; resolved_at?: string | null };
         Update: { id?: never; map_id?: string | null; map_url?: string; reason?: string; details?: string; contact?: string | null; requester_id?: string | null; status?: string; resolved_at?: string | null };
         Relationships: [{ foreignKeyName: 'copyright_requests_map_id_fkey'; columns: ['map_id']; isOneToOne: false; referencedRelation: 'maps'; referencedColumns: ['id'] }];
       };
