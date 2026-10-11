@@ -3,6 +3,16 @@
 
 create schema if not exists private;
 
+-- Optional Supabase/platform event-trigger helper: block direct API/RPC execution
+-- while allowing PostgreSQL to invoke it as an event trigger.
+do $migration$
+begin
+  if to_regprocedure('public.rls_auto_enable()') is not null then
+    execute 'REVOKE EXECUTE ON FUNCTION public.rls_auto_enable() FROM PUBLIC, anon, authenticated';
+  end if;
+end
+$migration$;
+
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   username text unique,
@@ -76,6 +86,7 @@ create index reports_map_idx on public.reports(map_id);
 create index reports_reporter_idx on public.reports(reporter_id);
 create index copyright_requests_status_created_at_idx on public.copyright_requests(status, created_at desc);
 create index copyright_requests_map_idx on public.copyright_requests(map_id);
+create index copyright_requests_requester_id_idx on public.copyright_requests(requester_id);
 
 create or replace function public.set_updated_at() returns trigger language plpgsql set search_path = public as $$ begin new.updated_at = now(); return new; end; $$;
 create trigger profiles_set_updated_at before update on public.profiles for each row execute function public.set_updated_at();
@@ -129,7 +140,7 @@ create policy reports_read_own_or_admin on public.reports for select to authenti
 create policy reports_update_admin on public.reports for update to authenticated using ((select private.is_admin())) with check ((select private.is_admin()));
 create policy reports_delete_admin on public.reports for delete to authenticated using ((select private.is_admin()));
 create policy copyright_requests_insert on public.copyright_requests for insert with check ((select auth.uid()) is null or requester_id = (select auth.uid()));
-create policy copyright_requests_read_admin on public.copyright_requests for select to authenticated using ((select private.is_admin()));
+create policy copyright_requests_select_admin on public.copyright_requests for select to authenticated using ((select private.is_admin()));
 create policy copyright_requests_update_admin on public.copyright_requests for update to authenticated using ((select private.is_admin())) with check ((select private.is_admin()));
 
 grant select on public.profiles, public.maps, public.favorites, public.play_history, public.reports to anon, authenticated;
