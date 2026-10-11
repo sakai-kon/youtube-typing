@@ -1,25 +1,21 @@
-name: Deploy to GitHub Pages
+name: Validate GitHub Pages export
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
 
 env:
   NEXT_PUBLIC_BASE_PATH: /youtube-typing
   NEXT_PUBLIC_SUPABASE_URL: https://kfoaphvuwhksdpclfzna.supabase.co
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,25 +25,19 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build static site
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Build static export
         run: npm run build
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v4
-        with:
-          path: ./out
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Verify GitHub Pages output
+        run: |
+          test -f out/index.html
+          test -f out/play/index.html
+          grep -q '/youtube-typing/_next/' out/index.html
