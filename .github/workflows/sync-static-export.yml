@@ -21,7 +21,10 @@ jobs:
         env:
           NEXT_PUBLIC_BASE_PATH: /youtube-typing
           NEXT_PUBLIC_SUPABASE_URL: https://kfoaphvuwhksdpclfzna.supabase.co
+          NEXT_PUBLIC_APP_VERSION: ${{ github.sha }}
         run: |
+          mkdir -p public
+          printf '{"version":"%s"}\n' "$GITHUB_SHA" > public/version.json
           npm install
           npm run typecheck
           npm run build
@@ -51,6 +54,8 @@ jobs:
       - name: Verify generated app
         run: |
           test -f play/index.html
+          test -f version.json
+          grep -q '"version"' version.json
           grep -q 'YouTube Typing' play/index.html
           ! grep -q 'Space でスキップ' play/index.html
 
