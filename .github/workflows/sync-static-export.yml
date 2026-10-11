@@ -17,10 +17,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build current Next.js export
+      - name: Install dependencies and build current Next.js export
+        env:
+          NEXT_PUBLIC_BASE_PATH: /youtube-typing
+          NEXT_PUBLIC_SUPABASE_URL: https://kfoaphvuwhksdpclfzna.supabase.co
         run: |
           npm install
-          NEXT_PUBLIC_BASE_PATH=/youtube-typing NEXT_PUBLIC_SUPABASE_URL=https://kfoaphvuwhksdpclfzna.supabase.co npm run build
+          npm run typecheck
+          npm run build
 
       - name: Replace committed static export
         run: |
