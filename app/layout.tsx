@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { UpdateChecker } from './update-checker';
 
 export const metadata: Metadata = {
   title: 'YouTube Typing — 動画タイピングゲーム',
@@ -7,5 +8,12 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="ja"><body>{children}</body></html>;
+  return (
+    <html lang="ja">
+      <body>
+        <UpdateChecker />
+        {children}
+      </body>
+    </html>
+  );
 }
