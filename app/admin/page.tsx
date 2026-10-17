@@ -70,7 +70,7 @@ export default function AdminPage() {
       const me = meData as AdminProfileRow | null;
       if (roleError || me?.role !== 'admin') {
         setAllowed(false);
-        setMessage(roleError ? \`権限を確認できませんでした: \${roleError.message}\` : 'このアカウントには管理者権限がありません。');
+        setMessage(roleError ? `権限を確認できませんでした: ${roleError.message}` : 'このアカウントには管理者権限がありません。');
         return;
       }
 
@@ -91,13 +91,13 @@ export default function AdminPage() {
           .limit(500),
       ]);
 
-      if (reportError) setMessage(\`通報の読み込みに失敗しました: \${reportError.message}\`);
+      if (reportError) setMessage(`通報の読み込みに失敗しました: ${reportError.message}`);
       else setReports(reportData ?? []);
 
       if (profileError) {
         setMessage((previous) => previous
-          ? \`\${previous} / ユーザー一覧の読み込みに失敗しました: \${profileError.message}\`
-          : \`ユーザー一覧の読み込みに失敗しました: \${profileError.message}\`);
+          ? `${previous} / ユーザー一覧の読み込みに失敗しました: ${profileError.message}`
+          : `ユーザー一覧の読み込みに失敗しました: ${profileError.message}`);
       } else {
         setProfiles(profileData ?? []);
       }
@@ -120,7 +120,7 @@ export default function AdminPage() {
       })
       .eq('id', id);
     if (error) {
-      setMessage(\`通報の更新に失敗しました: \${error.message}\`);
+      setMessage(`通報の更新に失敗しました: ${error.message}`);
       return;
     }
     await load();
@@ -131,7 +131,7 @@ export default function AdminPage() {
     if (!supabase || !window.confirm('この譜面を非公開にしますか？')) return;
     const { error } = await supabase.from('maps').update({ visibility: 'private' }).eq('id', mapId);
     if (error) {
-      setMessage(\`非公開化に失敗しました: \${error.message}\`);
+      setMessage(`非公開化に失敗しました: ${error.message}`);
       return;
     }
     await load();
@@ -142,7 +142,7 @@ export default function AdminPage() {
     if (!supabase || !window.confirm('この譜面を削除しますか？この操作は元に戻せません。')) return;
     const { error } = await supabase.from('maps').delete().eq('id', mapId);
     if (error) {
-      setMessage(\`譜面の削除に失敗しました: \${error.message}\`);
+      setMessage(`譜面の削除に失敗しました: ${error.message}`);
       return;
     }
     await load();
@@ -153,7 +153,7 @@ export default function AdminPage() {
     if (!supabase || id === currentUserId) return;
     const { error } = await supabase.from('profiles').update({ role }).eq('id', id);
     if (error) {
-      setMessage(\`権限の更新に失敗しました: \${error.message}\`);
+      setMessage(`権限の更新に失敗しました: ${error.message}`);
       return;
     }
     await load();
@@ -278,7 +278,7 @@ export default function AdminPage() {
                     <article className="admin-list-card" key={report.id}>
                       <div className="admin-list-topline">
                         <span className="admin-item-id">REPORT / {report.id}</span>
-                        <span className={\`admin-status-chip \${closed ? 'is-closed' : 'is-open'}\`}>{statusLabel(report.status)}</span>
+                        <span className={`admin-status-chip ${closed ? 'is-closed' : 'is-open'}`}>{statusLabel(report.status)}</span>
                       </div>
                       <h3 className="admin-item-title">{report.reason || '理由未設定'}</h3>
                       <p className="admin-item-description">{report.details || '詳細は記載されていません。'}</p>
@@ -333,7 +333,7 @@ export default function AdminPage() {
                       </div>
                       <div className="admin-user-info">
                         <strong>{profile.display_name || profile.username || '名前未設定'}</strong>
-                        <span>{profile.username ? \`@\${profile.username}\` : 'ユーザー名未設定'}</span>
+                        <span>{profile.username ? `@${profile.username}` : 'ユーザー名未設定'}</span>
                         {isSelf && <span className="admin-self-label">あなたのアカウント</span>}
                       </div>
                       <label className="admin-role-control">
@@ -341,7 +341,7 @@ export default function AdminPage() {
                         <select
                           value={profile.role}
                           disabled={isSelf || isLoading}
-                          aria-label={\`\${profile.display_name || profile.username || profile.id} の権限\`}
+                          aria-label={`${profile.display_name || profile.username || profile.id} の権限`}
                           onChange={(event) => void setRole(profile.id, event.target.value as 'user' | 'admin')}
                         >
                           <option value="user">一般ユーザー</option>
