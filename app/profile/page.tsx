@@ -104,7 +104,7 @@ export default function ProfilePage() {
         <div className="page-head">
           <div>
             <h1 className="page-title">{profile.display_name || profile.username || 'ユーザー'}</h1>
-            <p className="muted">{profile.username ? \`@\${profile.username}\` : ''}</p>
+            <p className="muted">{profile.username ? `@${profile.username}` : ''}</p>
             {mine && profile.role === 'admin' && (
               <div className="profile-admin-note">
                 <span className="profile-admin-dot" aria-hidden="true" />
