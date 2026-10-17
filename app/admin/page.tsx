@@ -24,12 +24,13 @@ type Profile = {
 type AdminProfileRow = Pick<Profile, 'role'>;
 type ReportFilter = 'all' | 'open' | 'closed';
 
-const statusLabel = (status: string) => ({
+const statusLabels: Record<string, string> = {
   pending: '未確認',
   reviewing: '確認中',
   resolved: '解決済み',
   dismissed: '却下',
-}[status] ?? status);
+};
+const statusLabel = (status: string) => statusLabels[status] ?? status;
 
 export default function AdminPage() {
   const supabase = getSupabase();
