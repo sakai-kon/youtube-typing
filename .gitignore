@@ -1,6 +1,11 @@
 node_modules/
 .next/
-out/
+# Next.js static export output is copied to the repository root for GitHub Pages.
+/out/
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
 .DS_Store
 *.log
 .env.local
+
+# Keep the root _next/ assets tracked: GitHub Pages currently serves them from this branch.
